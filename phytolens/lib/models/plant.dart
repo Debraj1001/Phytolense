@@ -32,31 +32,69 @@ class Plant {
     return '🔴';
   }
 
-  factory Plant.fromMap(Map<String, dynamic> map) => Plant(
-    id: map['id'] ?? '',
-    userId: map['user_id'] ?? '',
-    name: map['name'] ?? 'Unknown',
-    type: map['plant_type'] ?? map['type'] ?? 'Other',
-    imageUrl: map['image_url'],
-    latestHealthScore: map['latest_health_score'] ?? 0,
-    latestDisease: map['latest_disease'],
-    addedAt: DateTime.tryParse(map['created_at'] ?? map['added_at'] ?? '') ?? DateTime.now(),
-    lastScannedAt: map['last_scanned_at'] != null
-        ? DateTime.tryParse(map['last_scanned_at'])
-        : null,
-    healthHistory: [],
-  );
+  Plant copyWith({
+    String? id,
+    String? userId,
+    String? name,
+    String? type,
+    String? imageUrl,
+    int? latestHealthScore,
+    String? latestDisease,
+    DateTime? addedAt,
+    DateTime? lastScannedAt,
+    List<HealthRecord>? healthHistory,
+  }) {
+    return Plant(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      name: name ?? this.name,
+      type: type ?? this.type,
+      imageUrl: imageUrl ?? this.imageUrl,
+      latestHealthScore: latestHealthScore ?? this.latestHealthScore,
+      latestDisease: latestDisease ?? this.latestDisease,
+      addedAt: addedAt ?? this.addedAt,
+      lastScannedAt: lastScannedAt ?? this.lastScannedAt,
+      healthHistory: healthHistory ?? this.healthHistory,
+    );
+  }
 
-  Map<String, dynamic> toMap() => {
-    'user_id': userId,
-    'name': name,
-    'type': type,
-    'image_url': imageUrl,
-    'latest_health_score': latestHealthScore,
-    'latest_disease': latestDisease,
-    'added_at': addedAt.toIso8601String(),
-    'last_scanned_at': lastScannedAt?.toIso8601String(),
-  };
+  factory Plant.fromMap(Map<String, dynamic> map) => Plant(
+        id: map['id']?.toString() ?? '',
+        userId: map['user_id']?.toString() ?? '',
+        name: map['name']?.toString() ?? 'Unknown',
+        type: (map['plant_type'] ?? map['type'] ?? 'Other').toString(),
+        imageUrl: map['image_url']?.toString(),
+        latestHealthScore: (map['latest_health_score'] as num?)?.toInt() ?? 0,
+        latestDisease: map['latest_disease']?.toString(),
+        addedAt: DateTime.tryParse(map['created_at']?.toString() ??
+                map['added_at']?.toString() ??
+                '') ??
+            DateTime.now(),
+        lastScannedAt: map['last_scanned_at'] != null
+            ? DateTime.tryParse(map['last_scanned_at'].toString())
+            : null,
+        healthHistory: [],
+      );
+
+  Map<String, dynamic> toMap({bool includeId = false}) {
+    final map = <String, dynamic>{
+      'user_id': userId,
+      'name': name,
+      'type': type,
+      'plant_type': type,
+      'image_url': imageUrl,
+      'latest_health_score': latestHealthScore,
+      'latest_disease': latestDisease,
+      'added_at': addedAt.toUtc().toIso8601String(),
+      'created_at': addedAt.toUtc().toIso8601String(),
+      'last_scanned_at': lastScannedAt?.toUtc().toIso8601String(),
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
+    if (includeId && id.isNotEmpty) {
+      map['id'] = id;
+    }
+    return map;
+  }
 }
 
 class HealthRecord {

@@ -130,20 +130,22 @@ class PaymentService {
       if (plan == 'trial') {
         await _supabase.activateTrial(user.uid);
       } else {
-        await _supabase.updateSubscription(user.uid, plan, days: 30);
+        await _supabase.updateSubscription(
+          user.uid,
+          plan,
+          days: 30,
+          razorpaySubscriptionId: response.paymentId,
+        );
       }
 
-      // 3. Record payment record
+      // 3. Record payment record with exact Supabase table schema
       try {
-        await Supabase.instance.client.from(AppConstants.tablePayments).insert({
-          'user_id': user.uid,
-          'plan': plan,
-          'amount': amount ~/ 100,
-          'payment_id': response.paymentId ?? 'test_${DateTime.now().millisecondsSinceEpoch}',
-          'order_id': response.orderId,
-          'status': 'completed',
-          'created_at': DateTime.now().toIso8601String(),
-        });
+        await _supabase.savePayment(
+          userId: user.uid,
+          amount: amount ~/ 100,
+          plan: plan,
+          razorpayPaymentId: response.paymentId ?? 'test_${DateTime.now().millisecondsSinceEpoch}',
+        );
       } catch (e) {
         debugPrint('Payment record log error: $e');
       }

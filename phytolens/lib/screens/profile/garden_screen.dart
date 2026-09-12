@@ -54,32 +54,41 @@ class _GardenScreenState extends State<GardenScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.backgroundDark,
+      backgroundColor: AppColors.lightBg,
       appBar: AppBar(
-        backgroundColor: AppColors.backgroundDark,
-        title: const Text('My Garden'),
+        backgroundColor: AppColors.lightBg,
+        elevation: 0,
+        title: const Text(
+          'My Garden',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
+        ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 18),
+          icon: const Icon(Icons.arrow_back_ios_new, size: 18, color: AppColors.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add, size: 22),
+            icon: const Icon(Icons.add, size: 24, color: AppColors.primary),
             onPressed: _addPlant,
           ),
         ],
       ),
       body: _loading
-          ? Padding(
-              padding: const EdgeInsets.all(16),
+          ? const Padding(
+              padding: EdgeInsets.all(16),
               child: ShimmerPlantGrid(count: 4),
             )
           : _plants.isEmpty
               ? _buildEmpty()
               : RefreshIndicator(
-                  onRefresh: () async {},
-                  color: AppColors.primaryLight,
-                  backgroundColor: AppColors.cardDark,
+                  onRefresh: () async {
+                    _load();
+                  },
+                  color: AppColors.primary,
+                  backgroundColor: Colors.white,
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: GridView.builder(
@@ -166,10 +175,11 @@ class _GardenScreenState extends State<GardenScreen> {
         showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
-            backgroundColor: AppColors.cardDark,
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             title: Text(
               hasNotStarted ? 'Trial Required' : 'Trial Expired',
-              style: const TextStyle(color: AppColors.warning),
+              style: const TextStyle(color: AppColors.warning, fontWeight: FontWeight.w700),
             ),
             content: Text(
               hasNotStarted
@@ -212,8 +222,9 @@ class _GardenScreenState extends State<GardenScreen> {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          backgroundColor: AppColors.cardDark,
-          title: const Text('Garden Limit Reached', style: TextStyle(color: AppColors.textPrimary)),
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Garden Limit Reached', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
           content: Text(
             tier == 'free'
                 ? 'Free accounts can track up to $maxPlants plant(s). Upgrade to Pro for more plants or Farm Pack for unlimited crop tracking.'
@@ -246,7 +257,7 @@ class _GardenScreenState extends State<GardenScreen> {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.cardDark,
+      backgroundColor: Colors.white,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -320,13 +331,13 @@ class _AddPlantSheetState extends State<_AddPlantSheet> {
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                       decoration: BoxDecoration(
                         color: selected
-                            ? AppColors.primary.withValues(alpha: 0.15)
-                            : AppColors.cardDarker,
+                            ? AppColors.primary.withValues(alpha: 0.12)
+                            : const Color(0xFFF1F5F3),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
                           color: selected
                               ? AppColors.primary
-                              : AppColors.textMuted.withValues(alpha: 0.2),
+                              : AppColors.lightBorder,
                         ),
                       ),
                       child: Text(
@@ -334,8 +345,8 @@ class _AddPlantSheetState extends State<_AddPlantSheet> {
                         style: TextStyle(
                           fontSize: 13,
                           color: selected
-                              ? AppColors.primaryLight
-                              : AppColors.textSecondary,
+                              ? AppColors.primary
+                              : AppColors.textPrimary,
                           fontWeight: selected
                               ? FontWeight.w600
                               : FontWeight.w400,

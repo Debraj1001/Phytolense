@@ -129,13 +129,56 @@ class SupabaseService {
         .select()
         .single();
     final saved = ScanResult.fromMap(res);
+
+    // 1. Upsert into secondary 'scans' table using exact matching UUID
     try {
-      await _client.from('scans').upsert(saved.toMap());
-    } catch (_) {}
+      await _client.from('scans').upsert(saved.toMap(includeId: true));
+    } catch (e) {
+      debugPrint('Secondary scans sync notice: $e');
+    }
+
+    // 2. If this scan belongs to a specific plant in the garden, update the plant
+    if (saved.plantId != null && saved.plantId!.isNotEmpty) {
+      try {
+        final plantUpdates = <String, dynamic>{
+          'latest_health_score': saved.healthScore,
+          'latest_disease': saved.diseaseName,
+          'last_scanned_at': saved.scannedAt.toUtc().toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        };
+        if (saved.imageUrl != null && saved.imageUrl!.isNotEmpty) {
+          plantUpdates['image_url'] = saved.imageUrl;
+        }
+        await _client.from('plants').update(plantUpdates).eq('id', saved.plantId!);
+      } catch (e) {
+        debugPrint('Error updating plant health from scan: $e');
+      }
+    }
+
     if (scan.userId.isNotEmpty) {
       await incrementScanCounters(scan.userId);
     }
     return saved;
+  }
+
+  Future<List<ScanResult>> getPlantScans(String plantId, {int limit = 30}) async {
+    final res = await _client
+        .from(AppConstants.tableScanHistory)
+        .select()
+        .eq('plant_id', plantId)
+        .order('scanned_at', ascending: false)
+        .limit(limit);
+    return res.map<ScanResult>((m) => ScanResult.fromMap(m)).toList();
+  }
+
+  Stream<List<ScanResult>> streamPlantScans(String plantId, {int limit = 30}) {
+    return _client
+        .from(AppConstants.tableScanHistory)
+        .stream(primaryKey: ['id'])
+        .eq('plant_id', plantId)
+        .order('scanned_at', ascending: false)
+        .limit(limit)
+        .map((list) => list.map((m) => ScanResult.fromMap(m)).toList());
   }
 
   Future<List<ScanResult>> getUserScans(String userId, {int limit = 50}) async {
@@ -214,6 +257,13 @@ class SupabaseService {
     };
   }
 
+
+  Future<void> updateScan(String scanId, Map<String, dynamic> updates) async {
+    await _client.from(AppConstants.tableScanHistory).update(updates).eq('id', scanId);
+    try {
+      await _client.from('scans').update(updates).eq('id', scanId);
+    } catch (_) {}
+  }
 
   Future<void> deleteScan(String scanId, {String? userId}) async {
     await _client.from(AppConstants.tableScanHistory).delete().eq('id', scanId);
@@ -314,17 +364,34 @@ class SupabaseService {
         .eq('uid', userId);
   }
 
-  Future<void> updateSubscription(String userId, String tier, {int days = 30}) async {
+  Future<void> updateSubscription(String userId, String tier, {int days = 30, String? razorpaySubscriptionId}) async {
+    final expiry = tier == 'free'
+        ? null
+        : DateTime.now().add(Duration(days: days)).toUtc().toIso8601String();
     final updates = <String, dynamic>{
       'subscription_tier': tier,
-      'subscription_expiry': tier == 'free'
-          ? null
-          : DateTime.now().add(Duration(days: days)).toIso8601String(),
+      'subscription_expiry': expiry,
     };
     await _client
         .from(AppConstants.tableUsers)
         .update(updates)
         .eq('uid', userId);
+
+    // Sync active tier to subscriptions history table
+    try {
+      await _client.from('subscriptions').insert({
+        'user_id': userId,
+        'plan_id': tier,
+        'status': tier == 'free' ? 'inactive' : 'active',
+        'starts_at': DateTime.now().toUtc().toIso8601String(),
+        'expires_at': expiry,
+        'razorpay_subscription_id': razorpaySubscriptionId,
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint('Notice: subscriptions table sync: $e');
+    }
   }
 
   Future<void> updateAvatar(String userId, String avatarUrl) async {
@@ -369,10 +436,17 @@ class SupabaseService {
       final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
       final path = '$userId/$fileName';
       
-      await _client.storage.from('scans').upload(path, file);
+      await _client.storage.from('scans').upload(
+        path,
+        file,
+        fileOptions: const FileOptions(
+          contentType: 'image/jpeg',
+          upsert: true,
+        ),
+      );
       return _client.storage.from('scans').getPublicUrl(path);
     } catch (e) {
-      debugPrint('Error uploading image: $e');
+      debugPrint('Error uploading image to Supabase Storage: $e');
       return null;
     }
   }
@@ -382,10 +456,17 @@ class SupabaseService {
       final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
       final path = '$userId/$fileName';
       
-      await _client.storage.from('avatars').upload(path, file);
+      await _client.storage.from('avatars').upload(
+        path,
+        file,
+        fileOptions: const FileOptions(
+          contentType: 'image/jpeg',
+          upsert: true,
+        ),
+      );
       return _client.storage.from('avatars').getPublicUrl(path);
     } catch (e) {
-      debugPrint('Error uploading avatar: $e');
+      debugPrint('Error uploading avatar to Supabase Storage: $e');
       return null;
     }
   }
@@ -471,13 +552,28 @@ class SupabaseService {
         .map((list) => list.map((m) => Plant.fromMap(m)).toList());
   }
 
-  Future<void> addPlant(String userId, String name, String plantType) async {
-    await _client.from('plants').insert({
+  Future<Plant> addPlant(
+    String userId,
+    String name,
+    String plantType, {
+    String? imageUrl,
+    int latestHealthScore = 0,
+    String? latestDisease,
+  }) async {
+    final now = DateTime.now().toUtc().toIso8601String();
+    final res = await _client.from('plants').insert({
       'user_id': userId,
       'name': name,
+      'type': plantType,
       'plant_type': plantType,
-      'created_at': DateTime.now().toIso8601String(),
-    });
+      'image_url': imageUrl,
+      'latest_health_score': latestHealthScore,
+      'latest_disease': latestDisease,
+      'added_at': now,
+      'created_at': now,
+      'updated_at': now,
+    }).select().single();
+    return Plant.fromMap(res);
   }
 
   Future<void> updatePlant(String plantId, Map<String, dynamic> updates) async {

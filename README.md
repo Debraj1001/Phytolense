@@ -75,18 +75,19 @@ graph TD
         GroqEngine -->|Structured Diagnosis & Care Plan| DiagnosticResult[Scan Result Model]
     end
     
-    subgraph Data & Sync Layer
-        DiagnosticResult --> Supabase[(Supabase DB & Auth)]
-        DiagnosticResult --> Firebase[(Firebase Firestore & Cloud Storage)]
+    subgraph Identity & Messaging Layer
+        User -->|Authentication Gateway| FirebaseAuth[Firebase Auth]
+        DiagnosticResult --> NotifService[Firebase Cloud Messaging & Local Reminders]
     end
-    
-    subgraph Notification & Services
-        DiagnosticResult --> NotifService[Local Notifications & FCM]
+
+    subgraph Data & Storage Layer
+        DiagnosticResult --> SupabaseDB[(Supabase PostgreSQL: users, scan_history, plants, payments, config)]
+        Cam -->|Upload Scan Images| SupabaseStorage[(Supabase Storage: scans & avatars buckets)]
     end
 
     subgraph Administration
         AdminUser([Admin]) --> AdminPortal[Phytolens Admin Web/App]
-        AdminPortal -->|Live Config & Quotas| Supabase
+        AdminPortal -->|Live Config, Moderation & Quotas| SupabaseDB
     end
 ```
 

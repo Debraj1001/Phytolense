@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../models/app_user.dart';
 
 import 'supabase_service.dart';
+import 'notification_service.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -75,7 +76,31 @@ class AuthService {
     try {
       final existingUser = await SupabaseService().getUser(firebaseUser.uid);
       if (existingUser != null) {
-        return existingUser;
+        // Non-destructive profile sync from Firebase Auth to Supabase
+        final updates = <String, dynamic>{};
+        if ((existingUser.displayName.isEmpty || existingUser.displayName == 'Plant Lover') &&
+            firebaseUser.displayName != null &&
+            firebaseUser.displayName!.isNotEmpty) {
+          updates['display_name'] = firebaseUser.displayName;
+        }
+        if (existingUser.avatarUrl == null && firebaseUser.photoURL != null) {
+          updates['avatar_url'] = firebaseUser.photoURL;
+        }
+        if (existingUser.email.isEmpty && firebaseUser.email != null && firebaseUser.email!.isNotEmpty) {
+          updates['email'] = firebaseUser.email;
+        }
+        if (updates.isNotEmpty) {
+          await SupabaseService().updateUser(firebaseUser.uid, updates);
+        }
+
+        // Trigger FCM device token sync to Supabase in background
+        NotificationService().syncDeviceToken();
+
+        return existingUser.copyWith(
+          displayName: updates['display_name'] ?? existingUser.displayName,
+          avatarUrl: updates['avatar_url'] ?? existingUser.avatarUrl,
+          email: updates['email'] ?? existingUser.email,
+        );
       }
       
       final user = AppUser(
@@ -87,6 +112,7 @@ class AuthService {
       );
 
       await SupabaseService().upsertUser(user);
+      NotificationService().syncDeviceToken();
       return user;
     } catch (e) {
       throw Exception('Failed to handle user in Supabase: $e');

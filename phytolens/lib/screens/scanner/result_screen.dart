@@ -56,6 +56,8 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
 
   String? _aiAdvice;
   bool _loadingAdvice = false;
+  bool _addedToGarden = false;
+  bool _addingToGarden = false;
 
   @override
   void initState() {
@@ -174,6 +176,57 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _saving = false);
+      }
+    }
+  }
+
+  Future<void> _addToGarden() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || _addingToGarden || _addedToGarden) return;
+
+    setState(() => _addingToGarden = true);
+    try {
+      final plant = await _supabase.addPlant(
+        user.uid,
+        _currentScan.plantName,
+        _currentScan.plantName,
+        imageUrl: _currentScan.imageUrl,
+        latestHealthScore: _currentScan.healthScore,
+        latestDisease: _currentScan.diseaseName,
+      );
+
+      // If we already saved this scan, link it to the new plant ID in Supabase
+      if (_currentScan.id.isNotEmpty) {
+        try {
+          await _supabase.updateScan(_currentScan.id, {'plant_id': plant.id});
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        setState(() {
+          _addingToGarden = false;
+          _addedToGarden = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${_currentScan.plantName} added to your Garden! 🌱'),
+            backgroundColor: AppColors.primary,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _addingToGarden = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not add to garden: $e'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
       }
     }
   }
@@ -378,21 +431,28 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        border: Border.all(color: AppColors.lightBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Row(
             children: [
-              Icon(Icons.spa_rounded, color: AppColors.primaryLight, size: 18),
+              Icon(Icons.spa_rounded, color: AppColors.primary, size: 18),
               SizedBox(width: 8),
               Text(
                 'Care Recommendations',
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
-                  color: Colors.white,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ],
@@ -416,12 +476,12 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
                 ),
                 strong: const TextStyle(
                   fontSize: 14,
-                  color: Colors.white,
+                  color: AppColors.textPrimary,
                   fontWeight: FontWeight.w700,
                 ),
                 listBullet: const TextStyle(
                   fontSize: 14,
-                  color: AppColors.primaryLight,
+                  color: AppColors.primary,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -482,6 +542,55 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
             ),
           ),
         ),
+        if (!_currentScan.isNonPlant) ...[
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: BouncingButton(
+              onTap: _addingToGarden || _addedToGarden ? null : _addToGarden,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                decoration: BoxDecoration(
+                  color: _addedToGarden
+                      ? AppColors.primary.withValues(alpha: 0.12)
+                      : Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _addedToGarden
+                        ? AppColors.primary
+                        : AppColors.lightBorder,
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (_addingToGarden)
+                      const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                      )
+                    else
+                      Icon(
+                        _addedToGarden ? Icons.check_circle_rounded : Icons.yard_outlined,
+                        size: 18,
+                        color: AppColors.primary,
+                      ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _addedToGarden ? 'Added to Your Garden' : 'Add to My Garden',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 10),
         SizedBox(
           width: double.infinity,

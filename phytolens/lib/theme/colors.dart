@@ -114,8 +114,16 @@ abstract class AppColors {
   );
 
   // ══════════════════════════════════════════════════════════════════════════
-  // LEGACY ALIASES — now pointing to LIGHT tokens (Soft Botanical redesign)
+  // LEGACY ALIASES & SOFT BOTANICAL TOKENS (Soft Botanical redesign)
   // ══════════════════════════════════════════════════════════════════════════
+  static const Color primaryGreen = primary;           // #10B981
+  static const Color mintGreen = primaryLight;         // #34D399
+  static const Color sageGreen = Color(0xFFA7F3D0);    // Soft botanical sage
+  static const Color forestGreen = primaryDark;        // #059669
+  static const Color lightBorder = Color(0xFFE2E8F0);  // Subtle slate border
+  static const Color borderLight = lightBorder;
+  static const Color cardLight = lightSurface;
+
   static const Color backgroundDark = lightBg;         // off-white canvas
   static const Color surfaceDark = lightSurface;       // pure white surfaces
   static const Color cardDark = lightSurface;          // white cards
