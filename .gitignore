@@ -1,0 +1,66 @@
+# -------------------------------------------------------------
+# Environment & Secret Files (CRITICAL - Never commit)
+# -------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# -------------------------------------------------------------
+# Dart / Flutter Build Artifacts
+# -------------------------------------------------------------
+.dart_tool/
+**/.dart_tool/
+.packages
+**/.packages
+build/
+**/build/
+.flutter-plugins
+**/.flutter-plugins
+.flutter-plugins-dependencies
+**/.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+
+# -------------------------------------------------------------
+# Android
+# -------------------------------------------------------------
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+**/android/local.properties
+**/android/key.properties
+*.jks
+*.keystore
+
+# -------------------------------------------------------------
+# iOS & macOS
+# -------------------------------------------------------------
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/macos/Pods/
+**/macos/Flutter/GeneratedPluginRegistrant.swift
+
+# -------------------------------------------------------------
+# Compiled Packages & App Bundles
+# -------------------------------------------------------------
+*.apk
+*.aab
+*.ipa
+*.app
+
+# -------------------------------------------------------------
+# IDE & System Files
+# -------------------------------------------------------------
+.vscode/
+**/.vscode/
+.idea/
+**/.idea/
+*.iml
+.hermes/
+.DS_Store
+Thumbs.db
+*.log

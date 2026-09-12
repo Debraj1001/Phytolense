@@ -1,0 +1,49 @@
+# Environment variables (NEVER commit)
+.env
+.env.local
+.env.*.local
+
+# API keys
+*.key
+*.pem
+
+# Dart/Flutter
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+.idea/
+.vscode/
+
+# Android
+android/app/debug/
+android/app/profile/
+android/app/release/
+android/local.properties
+android/key.properties
+*.jks
+*.keystore
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+
+# macOS
+macos/Pods/
+macos/Flutter/GeneratedPluginRegistrant.swift
+
+# Platform build artifacts
+*.apk
+*.aab
+*.ipa
+*.app
+
+# Miscellaneous
+*.log
+*.pyc
+__pycache__/
+.DS_Store

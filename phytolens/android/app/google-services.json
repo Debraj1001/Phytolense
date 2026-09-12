@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "646033659202",
+    "project_id": "phytolens-f7c63",
+    "storage_bucket": "phytolens-f7c63.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:646033659202:android:2e43dbc54e68a84ddb64db",
+        "android_client_info": {
+          "package_name": "com.phytolens.phytolens"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "646033659202-ptoem3fcp8lcclv77k19lsurnhjt3qd7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.phytolens.phytolens",
+            "certificate_hash": "db1fa81de01e718d7d4ab746dfe88faad2cb5391"
+          }
+        },
+        {
+          "client_id": "646033659202-3rimcckpeaca490ubm14ho21fgfif121.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDQqtEyvSQE3sAPqz6MPTtIbOAxAKcgTak"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "646033659202-3rimcckpeaca490ubm14ho21fgfif121.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
