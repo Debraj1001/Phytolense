@@ -1,7 +1,10 @@
-# 🌱 PhytoLens — AI-Powered Plant Health & Disease Diagnosis
+# 🌱 PhytoLens — AI Plant Health & Agronomic Intelligence
 
 <div align="center">
 
+[![Release](https://img.shields.io/badge/Release-v1.0.0-10B981?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Debraj1001/Phytolense/releases/tag/v1.0.0)
+[![APK Download](https://img.shields.io/badge/Download-APK_(136.6_MB)-059669?style=for-the-badge&logo=android&logoColor=white)](https://github.com/Debraj1001/Phytolense/releases/download/v1.0.0/phytolens-v1.0.0.apk)
+[![Web Portal](https://img.shields.io/badge/Live_Portal-phytolense.netlify.app-00C7B7?style=for-the-badge&logo=netlify&logoColor=white)](https://phytolense.netlify.app)
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.x-0175C2?style=for-the-badge&logo=dart&logoColor=white)](https://dart.dev)
 [![Riverpod](https://img.shields.io/badge/State-Riverpod_2.6-00D2B8?style=for-the-badge)](https://riverpod.dev)
@@ -12,10 +15,12 @@
 [![Razorpay](https://img.shields.io/badge/Payments-Razorpay-0C2340?style=for-the-badge&logo=razorpay&logoColor=white)](https://razorpay.com)
 [![SQLite](https://img.shields.io/badge/Offline-SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org)
 
-**An intelligent, multi-provider agronomic assistant that diagnoses plant pathologies, tracks local outbreaks, provides optimal spray windows, and connects farmers with nearby verified retailers.**
+**An intelligent, multi-engine agronomic health platform that diagnoses plant pathologies, tracks local outbreaks, calculates optimal spray windows, and connects farmers with verified agro-retailers.**
 
 [Overview](#-overview) •
+[Official Release & Download](#-official-release--downloads) •
 [Key Features](#-key-features) •
+[Web Admin Portal](#-web-admin-portal--landing-page) •
 [System Architecture](#-system-architecture) •
 [Ecosystem Workflow](#-ecosystem-workflow) •
 [Project Structure](#-project-structure) •
@@ -29,21 +34,42 @@
 
 ## 🌿 Overview
 
-**PhytoLens** is a mobile health intelligence platform built for farmers, agronomists, and gardeners. It bridges the gap between digital crop disease diagnosis and physical remedy implementation.
+**PhytoLens** is an end-to-end plant health intelligence ecosystem built for farmers, agronomists, and commercial growers. It bridges the gap between digital crop disease diagnosis and physical agricultural remedies.
 
-Combining on-device machine learning with high-throughput cloud vision models (multi-key Gemini Vision pool, PlantNet species identification, and Groq ultra-fast LLMs), PhytoLens delivers instant pathology identification, severity grading, step-by-step organic/chemical treatment protocols, real-time community epidemic tracking, and direct links to certified agro-dealers.
+Combining **on-device edge machine learning (TFLite/ONNX)** with high-throughput cloud vision models (multi-key Gemini Vision pool, PlantNet taxonomy, and Groq ultra-fast LLMs), PhytoLens delivers instant pathology identification, severity grading, curative chemical & organic protocols, real-time community epidemic tracking, and direct links to certified agro-dealers.
 
-Designed with a **Soft Botanical Minimalist** design system, featuring emerald and mint hues, tactile bouncing interactions, dark/light adaptive theming, fluid micro-animations, and offline-first database synchronization.
+The ecosystem includes:
+1. **Mobile Application (Flutter)**: Biophilic Neumorphic interface, camera scanner, offline-first SQLite cache, split online/offline AI usage tracking, and real-time fleet enforcement.
+2. **Web Portal & Fleet Command (React + Vite)**: Live landing page with a dynamic camera-scannable QR code generator, real-time fleet management, lockdown controls, and agronomic analytics.
+
+---
+
+## 📦 Official Release & Downloads
+
+| Platform | Channel | Status / Link |
+| :--- | :--- | :--- |
+| **Android APK** | Direct GitHub CDN | [**Download `phytolens-v1.0.0.apk` (136.6 MB)**](https://github.com/Debraj1001/Phytolense/releases/download/v1.0.0/phytolens-v1.0.0.apk) |
+| **Release Page** | GitHub Releases | [**PhytoLens v1.0.0 Release Notes & Assets**](https://github.com/Debraj1001/Phytolense/releases/tag/v1.0.0) |
+| **Live Web App** | Netlify Production | [**phytolense.netlify.app**](https://phytolense.netlify.app) |
+| **Google Play Store** | Official Distribution | ⏳ *In Review — Direct APK available above* |
+| **Apple App Store** | iOS TestFlight | ⏳ *Closed Beta Preview in progress* |
+| **Other Stores** | Amazon / F-Droid | ⏳ *Submissions queued* |
 
 ---
 
 ## ✨ Key Features
 
-### 🔍 Multimodal AI Disease Diagnosis & Species ID
-- **Multi-Key Vision Auto-Rotation Pool**: Resilient multi-key Gemini Vision integration that automatically fails over across backup keys upon hitting provider rate limits.
-- **82,000+ Plant Species Identification**: Powered by the PlantNet API for botanical taxonomy and species classification across global flora.
-- **On-Device Edge Inference**: Integrated TensorFlow Lite (`tflite_flutter`) and ONNX runtime support for low-latency offline diagnosis without internet connectivity.
-- **Automated Agronomic Protocols**: Rapid curative prescriptions via Groq LLM detailing exact chemical active ingredients, mixing ratios, application precautions, and organic homemade alternatives.
+### 🔍 Dual-Engine AI Pathology & Species ID
+- **On-Device Edge ML**: Bundled TensorFlow Lite models provide instant, zero-latency disease diagnosis even in remote fields without cell reception.
+- **Multi-Key Vision Auto-Rotation Pool**: Resilient multi-key Google Gemini Vision integration that automatically fails over across backup keys on HTTP 429 rate limits.
+- **82,000+ Plant Species Classification**: Powered by the PlantNet API for botanical taxonomy and species classification across global flora.
+- **Curative Agronomic Protocols**: Rapid prescriptions via Groq LLM detailing exact active ingredients, mixing ratios, application precautions, and organic bio-control alternatives.
+- **Split AI Usage Analytics**: Dedicated tracking for **Online AI** vs. **Offline Edge AI** queries with real-time quota meters.
+
+### 🛡️ Real-Time Fleet Security & Lockdown
+- **Instant Fleet Ban & Unban**: Administrative user suspensions propagate in real-time via Supabase PostgreSQL CDC websockets; banned devices immediately transition to a security restriction screen.
+- **Global Maintenance Lockdown**: Live toggle to suspend fleet operations during system upgrades with an instant lockdown barrier.
+- **Account Data Wipe**: Deleting a user in the Admin Portal automatically purges all related database rows and forces an immediate remote logout.
 
 ### 🩺 Emergency Doctor Pass (₹10 Micropayment)
 - **Low-Barrier Urgent Access**: Provides a 24-hour high-priority consultation pass for farmers facing sudden, severe crop failure without requiring long-term subscriptions.
@@ -51,30 +77,37 @@ Designed with a **Soft Botanical Minimalist** design system, featuring emerald a
 - **Automated Razorpay Checkout**: Seamless in-app micro-transaction flow that activates 1-day Pro benefits and opens the emergency consultation session immediately upon confirmation.
 
 ### 📡 Community Radar (Epidemic Early Warning)
-- **Localized Disease Tracking**: Monitors crowdsourced crop diagnoses within a 10 km geographic radius to detect outbreaks early (e.g., Late Blight, Downy Mildew).
-- **Preventative Action Prompts**: Notifies neighboring growers before airborne or pest-borne pathogens reach their fields, allowing preventative bio-sprays.
+- **Localized Outbreak Telemetry**: Monitors crop diagnoses within a 10 km geographic radius to detect outbreaks early (e.g., Late Blight, Downy Mildew, Rust).
+- **Preventative Action Prompts**: Alerts neighboring growers before airborne or pest-borne pathogens reach their fields, allowing preventative bio-sprays.
 
 ### 🌦️ Weather & Optimal Spray Window
 - **Atmospheric Spray Advisory**: Evaluates live temperature, humidity, wind velocity, and precipitation probability to calculate whether spraying conditions are **Optimal** or **Not Ideal**.
-- **Runoff & Evaporation Prevention**: Prevents wasted chemical investments by warning against spraying before rain or in strong winds.
+- **Runoff & Evaporation Prevention**: Prevents wasted chemical investments by warning against spraying before rain or in high heat/wind.
 
 ### 🏪 Nearby Retailers (B2B Directory)
-- **Closing the Remedy Loop**: Connects diagnosed pathology prescriptions directly to local agricultural input centers and fertilizer suppliers.
+- **Remedy Fulfillment**: Connects diagnosed pathology prescriptions directly to local agricultural input centers and fertilizer suppliers.
 - **Verified Dealer Roster**: Displays store addresses, ratings, and one-tap direct calling (`tel:`) to check product availability immediately.
-- **B2B Agricultural Commerce**: Enables certified distributors to list genuine inputs, protecting growers against counterfeit pesticides.
 
 ### 🌿 Garden Roster & Multi-Plot Management
 - **Plot & Crop History**: Full historical log of past scans, severity percentages, recovery stages, and confidence scores.
 - **Plant Profile Vault**: Maintain custom digital gardens, track watering schedules, and monitor healing progress over time.
 - **Voice Read-Aloud**: Integrated Text-to-Speech (`flutter_tts`) reads treatment recipes and dosage instructions aloud in field conditions.
 
-### 💾 Offline-First Architecture
-- **SQLite Local Database (`sqflite`)**: Caches scans, garden profiles, and stats locally so the app remains fully functional without cell towers.
-- **Auto-Sync Engine**: Queues actions taken in offline mode and synchronizes with Supabase PostgreSQL as soon as connectivity is restored.
+---
 
-### 💳 Tiered Subscriptions & Quota Management
-- **Flexible Tiers**: 2-Day Free Trial (₹0 / 15 scans & AI chats/day), Emergency Doctor Pass (₹10/24h), Pro Plan (₹49/30d), and Farm Pack (₹199/30d).
-- **Payment Verification**: Secure payment verification through Supabase Edge Functions with Razorpay integration.
+## 🌐 Web Admin Portal & Landing Page
+
+The web portal ([phytolense.netlify.app](https://phytolense.netlify.app)) serves as both the public product showcase and the operational control center for farm fleet telemetry:
+
+### ⚡ Dynamic Real-Time QR Code Generator
+- **Instant Camera Scanning**: Generates a high-contrast vector SVG QR code with Error Correction Level `M`/`H` that standard smartphone cameras and Google Lens can scan in milliseconds.
+- **Live Database Sync**: Connected to Supabase WebSockets. When an administrator modifies the QR foreground color, error correction level, logo badge, or target destination in the Admin Panel, the public landing page updates **live in real time without refreshing**.
+- **Lossless Zoom Viewer**: Modal viewer enabling high-resolution SVG and 2048px PNG QR downloads for field signage and printed packaging.
+
+### 🖥️ Admin Operations Dashboard
+- **Telemetry & KPIs**: Real-time counters for active scans, registered users, outbreak alerts, and payment transactions.
+- **User Management**: Neobrutalist confirmation modals with double-click debounce prevention to edit user roles, toggle bans, or wipe accounts.
+- **Global App Configuration**: Live adjustments for daily scan quotas, AI usage limits, trial durations, and pricing tiers.
 
 ---
 
@@ -82,23 +115,23 @@ Designed with a **Soft Botanical Minimalist** design system, featuring emerald a
 
 ```mermaid
 graph TD
-    User([Farmer / Gardener]) -->|Captures Leaf Photo| Cam[Camera / Viewfinder]
-    Cam --> ScanEngine[Scan Limiter & Quota Gate]
+    User([Farmer / Grower]) -->|Captures Leaf Photo| Cam[Camera / Viewfinder]
+    Cam --> QuotaGate[Scan Limiter & Quota Gate]
     
     subgraph AI Pipeline
-        ScanEngine --> AIRouter{AI Routing Engine}
+        QuotaGate --> AIRouter{AI Inference Router}
         AIRouter -->|Online Vision & Pathology| GemPool[Gemini Vision Multi-Key Pool]
         AIRouter -->|Botanical Taxonomy| PlantNet[PlantNet API]
-        AIRouter -->|Offline On-Device| TFLite[TFLite / ONNX Runtime]
+        AIRouter -->|Offline On-Device| TFLite[TFLite Edge Classifier]
         
         GemPool --> GroqEngine[Groq LLaMA-3 Agronomy Engine]
         PlantNet --> GroqEngine
         TFLite --> GroqEngine
-        GroqEngine -->|Structured Diagnosis & Prescription| DiagnosticResult[Scan Result Model]
+        GroqEngine -->|Structured Diagnosis & Remedy| DiagnosticResult[Scan Result Model]
     end
 
-    subgraph Field Intelligence & Assistance
-        DiagnosticResult --> SprayWindow[Weather Service: Spray Window]
+    subgraph Field Intelligence & Action
+        DiagnosticResult --> SprayWindow[Weather Service: Optimal Spray Window]
         DiagnosticResult --> RadarAlert[Community Radar: Outbreak Telemetry]
         DiagnosticResult --> DoctorPass[Emergency Doctor Pass ₹10]
         DiagnosticResult --> B2BDirectory[Nearby Retailers B2B Directory]
@@ -106,13 +139,13 @@ graph TD
 
     subgraph Data & Sync Layer
         DiagnosticResult --> LocalDB[(SQLite Local Database)]
-        LocalDB <-->|Bidirectional Sync| SupabaseDB[(Supabase PostgreSQL: users, scans, plants, payments)]
-        Cam -->|Image Upload| SupabaseStorage[(Supabase Storage: scans bucket)]
+        LocalDB <-->|Bidirectional Sync| SupabaseDB[(Supabase PostgreSQL: users, scans, config)]
+        Cam -->|Cloud Backup| SupabaseStorage[(Supabase Storage: scans)]
     end
 
-    subgraph Identity & Notifications
-        User -->|Authentication| SupabaseAuth[Supabase Auth / Firebase Auth]
-        DiagnosticResult --> NotifService[FCM & Local Reminders]
+    subgraph Realtime Fleet Telemetry
+        SupabaseDB <-->|PostgreSQL CDC WebSocket| WebPortal[Web Admin Portal & QR Manager]
+        SupabaseDB <-->|Realtime Fleet Channel| SecurityGate[Lockdown & Ban Screen Gate]
     end
 ```
 
@@ -137,7 +170,7 @@ graph LR
 Plant-life/
 ├── phytolens/                       # 📱 Primary Flutter Mobile Application
 │   ├── android/                     # Native Android build & Gradle configuration
-│   ├── ios/                         # Native iOS build configuration & Pods
+│   ├── ios/                         # Native iOS build configuration
 │   ├── assets/
 │   │   ├── images/                  # Botanical vectors, illustrations, icons
 │   │   ├── animations/              # Lottie animations & micro-interactions
@@ -160,67 +193,97 @@ Plant-life/
 │   │   │   ├── scanner/             # Live Camera Viewfinder & Result Screen
 │   │   │   ├── settings/            # Settings & On-Device Model Manager
 │   │   │   ├── splash/              # Animated Brand Launch Screen
-│   │   │   └── subscription/        # Upgrade, Trial Activation & Transformation
+│   │   │   ├── subscription/        # Upgrade, Trial Activation & Transformation
+│   │   │   └── system/              # Real-Time Lockdown & Ban Enforcement Screens
 │   │   ├── services/                # Supabase, Gemini, Groq, Weather, Payment, ML
-│   │   ├── theme/                   # Dual-Theme (Dark/Light), Colors & Typography
-│   │   └── widgets/                 # EmergencyDoctorPassSheet, BouncingButton, Cards
+│   │   ├── theme/                   # Biophilic Neumorphism Theme & Tokens
+│   │   └── widgets/                 # Modals, DoctorPassSheet, GlassButtons, Snackbars
 │   ├── pubspec.yaml                 # Dependencies & asset declarations
 │   └── .env.example                 # Environment variables template
+│
+├── web/                             # 🌐 React + Vite Public Portal & Admin Dashboard
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── Admin/               # User Manager, QR Config, Outbreaks, Config Manager
+│   │   │   ├── LandingPage/         # Hero, Features, Showcase, QrDownloadSection, Footer
+│   │   │   ├── Navbar.jsx           # Public Navigation & Admin Login Modal Trigger
+│   │   │   └── QrZoomModal.jsx      # High-Resolution Vector QR Export & Zoom Tool
+│   │   ├── context/
+│   │   │   └── AppContext.jsx       # Supabase Realtime Provider & Fleet State
+│   │   ├── services/
+│   │   │   └── supabase.js          # Public + Privileged Supabase Admin API Clients
+│   │   └── App.jsx                  # Main View Switcher (Landing vs. Admin Portal)
+│   ├── dist/                        # Production compiled bundle deployed to Netlify
+│   └── package.json                 # Web dependencies (qrcode, lucide-react, supabase)
+│
 ├── .gitignore                       # Ignored build outputs and secret keys
 ├── LICENSE                          # MIT License
-└── README.md                        # Documentation & setup guide
+└── README.md                        # Project documentation & reference
 ```
 
 ---
 
 ## 🚀 Getting Started
 
-### Prerequisites
-
-- [Flutter SDK](https://flutter.dev/docs/get-started/install) (`>= 3.0.0`)
-- [Dart SDK](https://dart.dev/get-dart) (`>= 3.0.0 < 4.0.0`)
-- Android Studio / VS Code with Flutter extension
-- Connected physical Android/iOS device or emulator
-- Supabase Project & Firebase Project
-
-### Installation & Run
+### Mobile Application (Flutter)
 
 1. **Clone the repository:**
    ```bash
    git clone https://github.com/Debraj1001/Phytolense.git
-   cd Phytolense
+   cd Phytolense/phytolens
    ```
 
-2. **Navigate to the application directory:**
-   ```bash
-   cd phytolens
-   ```
-
-3. **Install dependencies:**
+2. **Install Flutter dependencies:**
    ```bash
    flutter pub get
    ```
 
-4. **Configure environment variables:**
+3. **Configure environment variables:**
    ```bash
    cp .env.example .env
-   # Edit .env and supply your credentials (see below)
+   # Populate with your Supabase, Gemini, and Groq API keys
    ```
 
-5. **Run on your connected device:**
+4. **Build or Run:**
    ```bash
-   # List connected devices
-   flutter devices
-
-   # Run on selected device
+   # Run on connected device
    flutter run
+
+   # Compile release APK
+   flutter build apk --release
+   ```
+
+---
+
+### Web Portal & Admin Dashboard (React + Vite)
+
+1. **Navigate to the web directory:**
+   ```bash
+   cd Phytolense/web
+   ```
+
+2. **Install npm dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Start the local development server:**
+   ```bash
+   npm run dev
+   # Accessible at http://localhost:5173
+   ```
+
+4. **Build and deploy to Netlify:**
+   ```bash
+   npm run build
+   netlify deploy --prod --dir=dist
    ```
 
 ---
 
 ## 🔑 Environment Configuration
 
-Create a `.env` file in the `phytolens/` root directory using `.env.example`:
+Create a `.env` file in the `phytolens/` root directory based on `.env.example`:
 
 ```ini
 # Supabase Configuration
@@ -255,10 +318,11 @@ DATABASE_URL=postgresql://postgres:password@db.your-project.supabase.co:5432/pos
 
 ## 🔒 Security & Best Practices
 
-- **Never Commit Secrets**: `.env` and sensitive credential files (`google-services.json`, keystores) are excluded via `.gitignore`.
-- **Multi-Key API Resiliency**: Gemini Vision keys auto-rotate upon receiving HTTP 429 (Rate Limit) or 503 errors, ensuring 99.9% uptime.
-- **Client-Side Image Optimization**: Images are automatically compressed and resized before transmission to minimize mobile data usage.
-- **Offline Data Integrity**: Scans and treatments are backed up to local SQLite storage with checksums to prevent data loss in remote areas.
+- **Zero Secret Exposure**: `.env`, keystores, and credentials are completely excluded via `.gitignore`.
+- **Row-Level Security (RLS)**: Supabase PostgreSQL tables enforce RLS policies; administrative updates use scoped service role handlers.
+- **Debounced Admin Actions**: Critical administrative mutations (bans, deletions, lockdown) utilize Neobrutalist confirmation dialogs with double-click debounce prevention.
+- **Client-Side Image Optimization**: High-resolution camera captures are compressed on-device before transmission to minimize rural bandwidth consumption.
+- **Offline Data Integrity**: Diagnoses and treatments are cached in SQLite with checksum verification to guarantee data safety in remote farmlands.
 
 ---
 
