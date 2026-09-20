@@ -58,12 +58,16 @@ class AppUser {
 
   int get todayScans {
     final today = DateTime.now().toIso8601String().substring(0, 10);
-    return (lastScanDate == today) ? dailyScanCount : 0;
+    if (lastScanDate == null) return 0;
+    final cleanDate = lastScanDate!.length >= 10 ? lastScanDate!.substring(0, 10) : lastScanDate!;
+    return (cleanDate == today) ? dailyScanCount : 0;
   }
 
   int get todayAi {
     final today = DateTime.now().toIso8601String().substring(0, 10);
-    return (lastAiDate == today) ? dailyAiCount : 0;
+    if (lastAiDate == null) return 0;
+    final cleanDate = lastAiDate!.length >= 10 ? lastAiDate!.substring(0, 10) : lastAiDate!;
+    return (cleanDate == today) ? dailyAiCount : 0;
   }
 
   String get levelTitle {

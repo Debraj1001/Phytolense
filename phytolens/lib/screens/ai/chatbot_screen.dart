@@ -5,6 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
+
+import '../../data/chat_database.dart';
 import '../../services/groq_service.dart';
 import '../../services/local_llm_service.dart';
 import '../../services/sync_service.dart';
@@ -14,20 +18,25 @@ import '../../providers/ai_settings_provider.dart';
 import '../../theme/colors.dart';
 import '../../theme/design_tokens.dart';
 import '../../widgets/loading_dots.dart';
+import '../../widgets/bouncing_button.dart';
+import '../../widgets/glass_button.dart';
 import '../subscription/upgrade_screen.dart';
 import '../subscription/trial_activation_screen.dart';
 import '../../providers/app_config_provider.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
 
 class ChatMessage {
+  final int? id;
   final String role; // 'user' | 'assistant'
   final String content;
   final DateTime time;
+  final String source; // 'online' | 'offline'
 
   const ChatMessage({
+    this.id,
     required this.role,
     required this.content,
     required this.time,
+    this.source = 'online',
   });
 }
 
@@ -44,6 +53,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
   final _groq = GroqService();
   final _llmService = LocalLLMService();
   final _syncService = SyncService();
+  final _chatDb = ChatDatabase();
   final _textCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   final _focusNode = FocusNode();
@@ -51,15 +61,24 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
   List<ChatMessage> _messages = [];
   bool _isTyping = false;
   bool _isOffline = false;
+  bool _isLoadingHistory = true;
+  String? _sessionId;
+  String? _userId;
 
   @override
   void initState() {
     super.initState();
-    _checkConnectivity();
-    _addWelcome();
-    if (widget.initialMessage != null) {
+    _initChat();
+  }
+
+  Future<void> _initChat() async {
+    await _checkConnectivity();
+    // Proactively push any unsynced offline chat usage
+    _syncService.syncOfflineChatUsage();
+    await _loadHistory();
+    if (widget.initialMessage != null && widget.initialMessage!.trim().isNotEmpty) {
       Future.delayed(const Duration(milliseconds: 500), () {
-        _sendMessage(widget.initialMessage!);
+        if (mounted) _sendMessage(widget.initialMessage!);
       });
     }
   }
@@ -69,17 +88,63 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
     if (mounted) setState(() => _isOffline = !online);
   }
 
+  Future<void> _loadHistory() async {
+    final uid = Supabase.instance.client.auth.currentUser?.id ?? 'guest_user';
+    _userId = uid;
+    try {
+      _sessionId = await _chatDb.getOrCreateActiveSession(uid);
+      final rawMsgs = await _chatDb.getSessionMessages(_sessionId!);
+      if (rawMsgs.isNotEmpty) {
+        _messages = rawMsgs.map((m) {
+          return ChatMessage(
+            id: m['id'] as int?,
+            role: m['role'] as String,
+            content: m['content'] as String,
+            time: DateTime.tryParse(m['created_at'] as String? ?? '') ?? DateTime.now(),
+            source: m['source'] as String? ?? 'online',
+          );
+        }).toList();
+      } else {
+        _addWelcome();
+      }
+    } catch (e) {
+      debugPrint('Error loading chat history from SQLite: $e');
+      _addWelcome();
+    } finally {
+      if (mounted) setState(() => _isLoadingHistory = false);
+      _scrollToBottom();
+    }
+  }
+
   void _addWelcome() {
     final offlineNote = _isOffline
         ? '\n\n📱 *You are offline — I\'m using on-device AI. Quality may vary, but I\'m here to help!*'
         : '';
-    _messages = [
-      ChatMessage(
-        role: 'assistant',
-        content: '🌿 Hi! I\'m PhytoLens AI${_isOffline ? ' (Offline Mode)' : ''}. I can help with plant diseases, treatments, growing tips, and garden advice.$offlineNote\n\nWhat\'s on your mind today?',
-        time: DateTime.now(),
-      ),
-    ];
+    final welcomeMsg = ChatMessage(
+      role: 'assistant',
+      content: '🌿 Hi! I\'m PhytoLens AI${_isOffline ? ' (Offline Mode)' : ''}. I can help with plant diseases, treatments, growing tips, and garden advice.$offlineNote\n\nWhat\'s on your mind today?',
+      time: DateTime.now(),
+      source: _isOffline ? 'offline' : 'online',
+    );
+    _messages = [welcomeMsg];
+  }
+
+  Future<void> _resetConversation() async {
+    if (_userId == null) return;
+    ref.read(aiLimitProvider.notifier).refreshLimit();
+    try {
+      final newSessionId = await _chatDb.createNewSession(_userId!);
+      if (mounted) {
+        setState(() {
+          _sessionId = newSessionId;
+          _messages = [];
+          _addWelcome();
+        });
+        _scrollToBottom();
+      }
+    } catch (e) {
+      debugPrint('Reset conversation error: $e');
+    }
   }
 
   Future<void> _sendMessage(String text) async {
@@ -88,20 +153,47 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
     // Re-check connectivity
     await _checkConnectivity();
 
-    // Check AI limit
-    final limit = ref.read(aiLimitProvider).value;
-    if (limit == null || !limit.canUse || limit.isExpired) {
-      if (limit?.isExpired == true && mounted) {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const UpgradeScreen()));
+    // Enforce AI limit check (both offline and online)
+    final limitCheck = await ScanLimiter().checkAiLimit();
+    if (!limitCheck.canUse) {
+      if ((limitCheck.isExpired || limitCheck.isNotStarted) && mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => limitCheck.isNotStarted ? const TrialActivationScreen() : const UpgradeScreen(),
+          ),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(limitCheck.reason ?? 'Daily AI limit reached on your plan.'),
+            backgroundColor: AppColors.warning,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
       return;
     }
 
+    final trimmedText = text.trim();
     final userMsg = ChatMessage(
       role: 'user',
-      content: text.trim(),
+      content: trimmedText,
       time: DateTime.now(),
+      source: _isOffline ? 'offline' : 'online',
     );
+
+    // Save user message immediately to local SQLite
+    if (_sessionId != null && _userId != null) {
+      await _chatDb.saveMessage(
+        sessionId: _sessionId!,
+        userId: _userId!,
+        role: 'user',
+        content: trimmedText,
+        source: _isOffline ? 'offline' : 'online',
+        synced: _isOffline ? 0 : 1,
+      );
+    }
 
     setState(() {
       _messages.add(userMsg);
@@ -109,6 +201,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
         role: 'assistant',
         content: '',
         time: DateTime.now(),
+        source: _isOffline ? 'offline' : 'online',
       ));
       _isTyping = true;
     });
@@ -124,7 +217,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
           .cast<Map<String, String>>();
       
       if (history.isNotEmpty && history.last['role'] == 'assistant' && history.last['content']!.isEmpty) {
-        history.removeLast(); // Remove the empty placeholder
+        history.removeLast(); // Remove empty placeholder
       }
 
       Stream<String> stream;
@@ -133,32 +226,41 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
       if (_isOffline || !isAiEngineEnabled) {
         // ── OFFLINE / AI ENGINE DISABLED: Use local LLM ──
         if (_llmService.isModelLoaded) {
-          stream = _llmService.streamChat(text, history);
+          stream = _llmService.streamChat(trimmedText, history);
         } else if (await _llmService.isModelDownloaded()) {
           await _llmService.loadModel();
-          stream = _llmService.streamChat(text, history);
+          stream = _llmService.streamChat(trimmedText, history);
         } else {
-          // Model not downloaded — show prompt
+          // Model not downloaded — provide clear instruction
           if (mounted) {
             setState(() {
               final lastIdx = _messages.length - 1;
               _messages[lastIdx] = ChatMessage(
                 role: 'assistant',
                 content: !isAiEngineEnabled
-                    ? '📱 AI Engine is disabled in settings. You need to download the offline AI model (1.5 GB, one-time) in Settings to use the chatbot locally, or re-enable the AI Engine in Profile Settings.'
-                    : '📱 The AI model needs to be downloaded first (1.5 GB, one-time).\n\nGo to **Settings → AI Model** to download, or connect to the internet to use cloud AI.',
+                    ? '📱 AI Engine is disabled in settings. You need to download the offline AI model (~669 MB) in Settings to use the chatbot locally, or re-enable the AI Engine in Profile Settings.'
+                    : '📱 The offline AI model needs to be downloaded first (~669 MB, one-time).\n\nGo to **Profile → AI Model Manager** to download, or connect to the internet to use cloud AI.',
                 time: DateTime.now(),
+                source: 'offline',
               );
               _isTyping = false;
             });
+            if (_sessionId != null && _userId != null) {
+              await _chatDb.saveMessage(
+                sessionId: _sessionId!,
+                userId: _userId!,
+                role: 'assistant',
+                content: _messages.last.content,
+                source: 'offline',
+                synced: 1,
+              );
+            }
           }
           return;
         }
-        // Increment local AI count for offline tier tracking
-        await ScanLimiter().incrementLocalAiCount();
       } else {
-        // ── ONLINE: Use Groq (existing behavior) ──
-        stream = _groq.streamChat(text, history);
+        // ── ONLINE: Use Groq ──
+        stream = _groq.streamChat(trimmedText, history);
       }
 
       await for (final chunk in stream) {
@@ -169,31 +271,74 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
             role: 'assistant',
             content: _messages[lastIdx].content + chunk,
             time: _messages[lastIdx].time,
+            source: _isOffline ? 'offline' : 'online',
           );
         });
         _scrollToBottom();
       }
 
-      // Record AI usage after full response
-      if (!_isOffline) {
-        final len = _messages.last.content.length;
+      // Sanitize response to prevent code leakage and tags
+      final lastIdx = _messages.length - 1;
+      final cleanedResponse = LocalLLMService.cleanResponse(_messages[lastIdx].content);
+      if (mounted) {
+        setState(() {
+          _messages[lastIdx] = ChatMessage(
+            role: 'assistant',
+            content: cleanedResponse,
+            time: _messages[lastIdx].time,
+            source: _isOffline ? 'offline' : 'online',
+          );
+        });
+      }
+
+      // Persist assistant message to local SQLite
+      if (_sessionId != null && _userId != null && cleanedResponse.isNotEmpty) {
+        await _chatDb.saveMessage(
+          sessionId: _sessionId!,
+          userId: _userId!,
+          role: 'assistant',
+          content: cleanedResponse,
+          source: _isOffline ? 'offline' : 'online',
+          synced: 1,
+        );
+      }
+
+      // Count offline or online usage
+      if (_isOffline) {
+        await ScanLimiter().incrementLocalAiCount();
+      } else {
+        final len = cleanedResponse.length;
         await ref.read(aiLimitProvider.notifier).recordUsage(len);
       }
 
       if (mounted) setState(() => _isTyping = false);
     } catch (e) {
       if (mounted) {
+        final errMsg = _isOffline
+            ? '⚠️ The on-device AI had a problem. Try closing other apps to free memory.'
+            : '⚠️ Sorry, I couldn\'t get a response. Please check your connection and try again.';
+        final lastIdx = _messages.length - 1;
+        final cleanErr = LocalLLMService.cleanResponse(errMsg);
         setState(() {
-          final lastIdx = _messages.length - 1;
           _messages[lastIdx] = ChatMessage(
             role: 'assistant',
-            content: _isOffline
-                ? '⚠️ The on-device AI had a problem. Try closing other apps to free memory.'
-                : '⚠️ Sorry, I couldn\'t get a response. Please check your connection and try again.',
+            content: cleanErr,
             time: DateTime.now(),
+            source: _isOffline ? 'offline' : 'online',
           );
           _isTyping = false;
         });
+
+        if (_sessionId != null && _userId != null) {
+          await _chatDb.saveMessage(
+            sessionId: _sessionId!,
+            userId: _userId!,
+            role: 'assistant',
+            content: cleanErr,
+            source: _isOffline ? 'offline' : 'online',
+            synced: 1,
+          );
+        }
       }
     }
   }
@@ -216,6 +361,13 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
       backgroundColor: AppColors.backgroundDark,
       appBar: AppBar(
         backgroundColor: AppColors.backgroundDark,
+        leadingWidth: 54,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 12),
+          child: Center(
+            child: GlassButton.back(),
+          ),
+        ),
         title: Row(
           children: [
             const CircleAvatar(
@@ -224,74 +376,82 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
               child: Icon(Icons.smart_toy, color: AppColors.secondary, size: 18),
             ),
             const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'PhytoLens AI',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                ),
-                Consumer(
-                  builder: (context, ref, child) {
-                    final aiState = ref.watch(aiLimitProvider);
-                    if (aiState.isLoading || aiState.value == null) {
-                      return const Text('Plant Health Expert', style: TextStyle(fontSize: 11, color: AppColors.textMuted));
-                    }
-                    final limit = aiState.value!;
-                    if (limit.isNotStarted) {
-                      return const Text('Trial Required • 2-Day Trial for ₹1', style: TextStyle(fontSize: 11, color: AppColors.primaryLight));
-                    }
-                    if (limit.isExpired) {
-                      return const Text('Trial Ended • Upgrade to Chat', style: TextStyle(fontSize: 11, color: AppColors.warning));
-                    }
-                    if (limit.isUnlimited) {
-                      return Text('Unlimited chats • ${limit.tier.toUpperCase()}', style: const TextStyle(fontSize: 11, color: AppColors.primaryLight));
-                    }
-                    return Text(
-                      '${limit.remaining} / ${limit.limit} chats left • ${limit.tier.toUpperCase()}',
-                      style: const TextStyle(fontSize: 11, color: AppColors.primaryLight),
-                    );
-                  },
-                ),
-              ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'PhytoLens AI',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                  Consumer(
+                    builder: (context, ref, child) {
+                      final aiState = ref.watch(aiLimitProvider);
+                      if (aiState.isLoading || aiState.value == null) {
+                        return const Text('Plant Health Expert', style: TextStyle(fontSize: 11, color: AppColors.textMuted));
+                      }
+                      final limit = aiState.value!;
+                      if (limit.isNotStarted) {
+                        return const Text('Trial Required • 2-Day Trial for ₹1', style: TextStyle(fontSize: 11, color: AppColors.primaryLight));
+                      }
+                      if (limit.isExpired) {
+                        return const Text('Trial Ended • Upgrade to Chat', style: TextStyle(fontSize: 11, color: AppColors.warning));
+                      }
+                      if (limit.isUnlimited) {
+                        return Text('Unlimited chats • ${limit.tier.toUpperCase()}', style: const TextStyle(fontSize: 11, color: AppColors.primaryLight));
+                      }
+                      return Text(
+                        '${limit.remaining} / ${limit.limit} chats left • ${limit.tier.toUpperCase()}',
+                        style: const TextStyle(fontSize: 11, color: AppColors.primaryLight),
+                        overflow: TextOverflow.ellipsis,
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, size: 20),
-            onPressed: () {
-              ref.read(aiLimitProvider.notifier).refreshLimit();
-              setState(() {
-                _messages = [];
-                _addWelcome();
-              });
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Messages
-          Expanded(
-            child: ListView.builder(
-              controller: _scrollCtrl,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              itemCount: _messages.length,
-              itemBuilder: (_, i) {
-                return _ChatBubble(message: _messages[i]);
-              },
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Center(
+              child: GlassButton(
+                size: 38,
+                icon: Icons.refresh_rounded,
+                iconSize: 19,
+                tooltip: 'Reset Conversation',
+                onTap: _resetConversation,
+              ),
             ),
           ),
-
-          // Input bar
-          _buildInputBar(),
         ],
       ),
+      body: _isLoadingHistory
+          ? const Center(child: LoadingDots(size: 8, color: AppColors.primary))
+          : Column(
+              children: [
+                // Messages
+                Expanded(
+                  child: ListView.builder(
+                    controller: _scrollCtrl,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    itemCount: _messages.length,
+                    itemBuilder: (_, i) {
+                      return _ChatBubble(message: _messages[i]);
+                    },
+                  ),
+                ),
+
+                // Input bar with safe area padding
+                _buildInputBar(),
+              ],
+            ),
     );
   }
 
   Widget _buildInputBar() {
+    final safeBottom = MediaQuery.of(context).viewPadding.bottom;
     final aiLimitState = ref.watch(aiLimitProvider);
     final isLoading = aiLimitState.isLoading || aiLimitState.value == null;
     final limit = aiLimitState.value;
@@ -302,9 +462,8 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
       
       if (isOffline) {
         // ── OFFLINE MODE: Show subtle banner but ALLOW input ──
-        // The model download prompt is shown if SLM is not downloaded.
         return Container(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+          padding: EdgeInsets.fromLTRB(16, 8, 16, 12 + safeBottom),
           width: double.infinity,
           decoration: BoxDecoration(
             color: AppColors.surfaceDark,
@@ -315,19 +474,18 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Offline banner
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Row(
+                child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.phone_android_rounded, size: 16, color: AppColors.primary),
-                    const SizedBox(width: 6),
-                    const Text(
+                    SizedBox(width: 6),
+                    Text(
                       '📱 Offline Mode — On-device AI',
                       style: TextStyle(
                         fontSize: 12, 
@@ -339,8 +497,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              // Chat input (ENABLED for offline)
-              _buildChatInput(),
+              _buildChatInput(safeBottom: 0),
             ],
           ),
         );
@@ -349,7 +506,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
       final cfg = ref.watch(appConfigProvider).value ?? const AppConfig();
 
       return Container(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + safeBottom),
         width: double.infinity,
         decoration: BoxDecoration(
           color: AppColors.surfaceDark,
@@ -431,15 +588,16 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
       );
     }
 
-    return _buildChatInput();
+    return _buildChatInput(safeBottom: safeBottom);
   }
 
-  Widget _buildChatInput() {
+  Widget _buildChatInput({double? safeBottom}) {
+    final bottomInset = safeBottom ?? MediaQuery.of(context).viewPadding.bottom;
     final aiLimitState = ref.watch(aiLimitProvider);
     final isLoading = aiLimitState.isLoading || aiLimitState.value == null;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: EdgeInsets.fromLTRB(16, 10, 16, 10 + bottomInset),
       decoration: BoxDecoration(
         color: AppColors.lightSurface,
         border: Border(
@@ -479,15 +637,16 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
             ),
           ),
           const SizedBox(width: 10),
-          GestureDetector(
+          BouncingButton(
+            scaleFactor: 0.90,
             onTap: (_isTyping || isLoading) ? null : () => _sendMessage(_textCtrl.text),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              width: 48,
-              height: 48,
+              width: 46,
+              height: 46,
               decoration: BoxDecoration(
                 gradient: (_isTyping || isLoading) ? null : AppColors.primaryGradient,
-                color: (_isTyping || isLoading) ? AppColors.lightCard : null,
+                color: (_isTyping || isLoading) ? const Color(0xFFE2E8F0) : null,
                 shape: BoxShape.circle,
                 boxShadow: (_isTyping || isLoading)
                     ? null
@@ -495,14 +654,14 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
                         BoxShadow(
                           color: AppColors.primary.withValues(alpha: 0.35),
                           blurRadius: 10,
-                          offset: const Offset(0, 2),
+                          offset: const Offset(0, 3),
                         ),
                       ],
               ),
               child: Icon(
-                Icons.send_rounded,
-                size: 20,
-                color: (_isTyping || isLoading) ? AppColors.textMuted : Colors.white,
+                Icons.arrow_upward_rounded,
+                size: 22,
+                color: (_isTyping || isLoading) ? AppColors.lightTextMuted : Colors.white,
               ),
             ),
           ),
@@ -568,8 +727,8 @@ class _ChatBubble extends StatelessWidget {
                 children: [
                   if (message.content.isEmpty && !isUser)
                     const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                      child: TypingIndicator(),
+                      padding: EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                      child: LoadingDots(size: 6, color: AppColors.secondary),
                     )
                   else if (isUser)
                     Text(
@@ -625,18 +784,39 @@ class _ChatBubble extends StatelessWidget {
                           color: AppColors.primaryLight,
                           fontSize: 13,
                         ),
+                        codeblockDecoration: BoxDecoration(
+                          color: const Color(0xFF1E293B),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white12),
+                        ),
+                        codeblockPadding: const EdgeInsets.all(10),
                       ),
                     ),
-                  const SizedBox(height: 4),
-                  Text(
-                    DateFormat('HH:mm').format(message.time),
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: isUser
-                          ? Colors.white54
-                          : AppColors.textMuted,
+                  if (message.content.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          DateFormat('HH:mm').format(message.time),
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: isUser
+                                ? Colors.white54
+                                : AppColors.textMuted,
+                          ),
+                        ),
+                        if (message.source == 'offline') ...[
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.offline_bolt_rounded,
+                            size: 11,
+                            color: isUser ? Colors.white54 : AppColors.textMuted,
+                          ),
+                        ],
+                      ],
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -677,7 +857,6 @@ class _CountdownTextState extends State<_CountdownText> {
       final now = DateTime.now();
       if (now.isAfter(_resetTime)) {
         _remaining = Duration.zero;
-        // Optionally trigger a provider refresh here
       } else {
         _remaining = _resetTime.difference(now);
       }

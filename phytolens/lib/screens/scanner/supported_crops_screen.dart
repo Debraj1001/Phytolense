@@ -3,14 +3,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../../data/supported_crops.dart';
+import '../../data/crops_dataset.dart';
 import '../../theme/colors.dart';
 import 'dart:ui';
 
 class SupportedCropsScreen extends StatelessWidget {
   const SupportedCropsScreen({super.key});
 
-  void _showConditions(BuildContext context, CropModel crop) {
+  void _showConditions(BuildContext context, CropData crop) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -27,7 +27,7 @@ class SupportedCropsScreen extends StatelessWidget {
         backgroundColor: AppColors.backgroundDark,
         elevation: 0,
         title: const Text(
-          'Supported Crops',
+          'Crop Explorer',
           style: TextStyle(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
@@ -56,7 +56,7 @@ class SupportedCropsScreen extends StatelessWidget {
                 SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'AI model trained on 14 crops (PlantVillage dataset). Tap a crop to see what conditions it can detect.',
+                    'Browse 24 supported crops. Tap a crop to see offline details and what conditions it can detect.',
                     style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
                   ),
                 ),
@@ -73,9 +73,9 @@ class SupportedCropsScreen extends StatelessWidget {
                 mainAxisSpacing: 14,
                 childAspectRatio: 0.85,
               ),
-              itemCount: supportedCrops.length,
+              itemCount: cropsDataset.length,
               itemBuilder: (context, index) {
-                final crop = supportedCrops[index];
+                final crop = cropsDataset[index];
                 return _CropCard(
                   crop: crop,
                   onTap: () => _showConditions(context, crop),
@@ -93,7 +93,7 @@ class SupportedCropsScreen extends StatelessWidget {
 }
 
 class _CropCard extends StatelessWidget {
-  final CropModel crop;
+  final CropData crop;
   final VoidCallback onTap;
 
   const _CropCard({required this.crop, required this.onTap});
@@ -193,7 +193,7 @@ class _CropCard extends StatelessWidget {
                             const Icon(Icons.biotech_rounded, size: 10, color: AppColors.primaryLight),
                             const SizedBox(width: 4),
                             Text(
-                              '${crop.conditions.length} conditions',
+                              '${crop.commonDiseases.length} conditions',
                               style: const TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
@@ -216,7 +216,7 @@ class _CropCard extends StatelessWidget {
 }
 
 class _ConditionsBottomSheet extends StatelessWidget {
-  final CropModel crop;
+  final CropData crop;
 
   const _ConditionsBottomSheet({required this.crop});
 
@@ -278,12 +278,18 @@ class _ConditionsBottomSheet extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '${crop.conditions.length} detectable conditions',
+                        '${crop.commonDiseases.length} detectable conditions',
                         style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
                       ),
                     ],
                   ),
                 ],
+              ),
+
+              const SizedBox(height: 12),
+              Text(
+                crop.description,
+                style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
               ),
 
               const SizedBox(height: 20),
@@ -293,10 +299,10 @@ class _ConditionsBottomSheet extends StatelessWidget {
               Flexible(
                 child: ListView.separated(
                   shrinkWrap: true,
-                  itemCount: crop.conditions.length,
+                  itemCount: crop.commonDiseases.length,
                   separatorBuilder: (_, __) => const Divider(color: Color(0x0D8FA98D), height: 1),
                   itemBuilder: (context, index) {
-                    final condition = crop.conditions[index];
+                    final condition = crop.commonDiseases[index];
                     final isHealthy = condition.toLowerCase() == 'healthy';
 
                     return ListTile(

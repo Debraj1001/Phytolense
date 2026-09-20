@@ -23,6 +23,7 @@ import 'garden_screen.dart';
 import 'model_manager_screen.dart';
 import '../history/analytics_screen.dart';
 import 'help_support_screen.dart';
+import '../../widgets/glass_button.dart';
 import 'about_screen.dart';
 import 'privacy_screen.dart';
 import 'edit_profile_screen.dart';
@@ -159,6 +160,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             expandedHeight: 280,
             pinned: true,
             backgroundColor: AppColors.backgroundDark,
+            leading: Center(
+              child: GlassButton.back(),
+            ),
             flexibleSpace: FlexibleSpaceBar(
               background: _loading
                   ? const Center(child: ShimmerProfileHeader())
@@ -299,7 +303,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         if (tier == 'farm') const Text('🌾 ', style: TextStyle(fontSize: 11))
                         else if (tier == 'pro') const Text('⚡ ', style: TextStyle(fontSize: 11)),
                         Text(
-                          tier == 'farm' ? 'FARM PACK' : tier == 'pro' ? 'PRO' : 'FREE',
+                          _user!.isPaidActive
+                              ? (tier == 'farm' ? 'FARM PACK' : 'PRO')
+                              : 'TRIAL',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
@@ -521,12 +527,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     // Compute trial status from DB config
     final config = ref.watch(appConfigProvider).value;
     final trialInfo = TrialService.getTrialInfo(_user, trialDays: config?.trialDays ?? 2);
-    final trialLabel = trialInfo.badgeLabel;
     final isLocked = !isPaid && trialInfo.isExpired;
 
-    final planLabel = isPaid
-        ? (user!.subscriptionTier.toLowerCase() == 'farm' ? 'Farm Pack' : 'Pro Tier')
-        : (trialInfo.isExpired ? 'Trial Ended' : (trialInfo.isActive ? 'Free Trial' : 'Trial Available'));
+    final String subscriptionBadge;
+    final Color badgeColor;
+    if (isPaid) {
+      subscriptionBadge = user!.subscriptionTier.toLowerCase() == 'farm' ? 'Farm Pack' : 'Pro Tier';
+      badgeColor = AppColors.secondary;
+    } else if (trialInfo.isActive) {
+      subscriptionBadge = 'Trial (${trialInfo.remainingDays}d left)';
+      badgeColor = AppColors.primary;
+    } else if (trialInfo.isExpired) {
+      subscriptionBadge = 'Trial Expired';
+      badgeColor = AppColors.error;
+    } else {
+      subscriptionBadge = 'Start Trial';
+      badgeColor = AppColors.primary;
+    }
 
     final items = [
       _MenuItem(
@@ -548,35 +565,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (trialLabel.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: Text(
-                  trialLabel.replaceFirst(' · ', ''),
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: trialInfo.isExpired
-                        ? AppColors.error
-                        : (trialInfo.isNotStarted ? AppColors.primaryDark : AppColors.warning),
-                  ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: badgeColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: badgeColor.withValues(alpha: 0.28),
+                  width: 1,
                 ),
               ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: (isPaid ? AppColors.secondary : AppColors.primary).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
-              ),
               child: Text(
-                planLabel,
+                subscriptionBadge,
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: isPaid ? AppColors.secondary : AppColors.primaryDark,
+                  color: badgeColor == AppColors.primary ? AppColors.primaryDark : badgeColor,
                 ),
               ),
             ),
+            const SizedBox(width: 6),
+            const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.textMuted),
           ],
         ),
         onTap: () {
@@ -634,7 +643,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         icon: Icons.auto_awesome,
         label: 'AI Cloud Engine',
         subtitle: isLocked
-            ? 'Access locked — Free trial ended'
+            ? 'Access locked — Trial ended'
             : (ref.watch(aiEngineProvider)
                 ? 'Cloud Vision & LLM Diagnosis active'
                 : 'Edge TFLite Model active (data saving)'),

@@ -136,4 +136,25 @@ class ScanResult {
     }
     return map;
   }
+
+  Map<String, dynamic> toSupabaseMap({bool includeId = false}) {
+    final map = <String, dynamic>{
+      'user_id': userId,
+      'image_url': imageUrl,
+      'disease_name': diseaseName,
+      'disease_confidence': diseaseConfidence,
+      'plant_name': plantName,
+      'health_score': healthScore,
+      'remedy': remedy,
+      'flagged': flagged,
+      'scanned_at': scannedAt.toUtc().toIso8601String(),
+    };
+    if (plantId != null && plantId!.isNotEmpty) {
+      map['plant_id'] = plantId;
+    }
+    if (includeId && id.isNotEmpty && !id.startsWith('temp_') && !id.startsWith('scan_')) {
+      map['id'] = id;
+    }
+    return map;
+  }
 }

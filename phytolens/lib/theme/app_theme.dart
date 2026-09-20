@@ -96,17 +96,17 @@ class AppTheme {
         margin: EdgeInsets.zero,
         shadowColor: featherShadow,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppTokens.radiusMD), // 16px
+          borderRadius: BorderRadius.circular(AppTokens.radiusLG), // 20px smooth squircle
           side: BorderSide(
             color: isDark
-                ? textMuted.withValues(alpha: 0.12)
-                : const Color(0xFFE2E8F0),
+                ? textMuted.withValues(alpha: 0.14)
+                : const Color(0xFFE2E8F0).withValues(alpha: 0.9),
             width: 1,
           ),
         ),
       ),
 
-      // ── Elevated Button (Primary — 12px radius, 48px height) ──────────────
+      // ── Elevated Button (Primary — 14px radius, 48px height) ──────────────
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ButtonStyle(
           backgroundColor: WidgetStateProperty.resolveWith((states) {
@@ -116,7 +116,7 @@ class AppTheme {
             return AppColors.primary;
           }),
           foregroundColor: WidgetStateProperty.all(Colors.white),
-          overlayColor: WidgetStateProperty.all(Colors.white.withValues(alpha: 0.1)),
+          overlayColor: WidgetStateProperty.all(Colors.white.withValues(alpha: 0.12)),
           elevation: WidgetStateProperty.all(0),
           shadowColor: WidgetStateProperty.all(Colors.transparent),
           minimumSize: WidgetStateProperty.all(const Size(0, AppTokens.tapTarget)), // 48px
@@ -124,7 +124,7 @@ class AppTheme {
             const EdgeInsets.symmetric(horizontal: AppTokens.space6, vertical: AppTokens.space3),
           ),
           shape: WidgetStateProperty.all(
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTokens.radiusSM)), // 12px
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), // 14px smooth squircle
           ),
           textStyle: WidgetStateProperty.all(
             GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.2),
@@ -303,7 +303,7 @@ class AppTheme {
 
       // ── Snackbar ──────────────────────────────────────────────────────────
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: isDark ? AppColors.darkCardHighest : const Color(0xFF1A2219),
+        backgroundColor: isDark ? const Color(0xE61E293B) : const Color(0xF20F172A),
         contentTextStyle: GoogleFonts.inter(
           fontSize: 13,
           color: Colors.white,
@@ -311,9 +311,13 @@ class AppTheme {
           letterSpacing: 0.1,
         ),
         behavior: SnackBarBehavior.floating,
-        width: 320,
+        width: 340,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppTokens.radiusPill),
+          side: BorderSide(
+            color: isDark ? Colors.white.withValues(alpha: 0.16) : Colors.white.withValues(alpha: 0.22),
+            width: 1.0,
+          ),
         ),
         elevation: 8,
         actionTextColor: AppColors.primaryLight,

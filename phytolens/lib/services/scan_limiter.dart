@@ -16,7 +16,7 @@ class ScanLimiter {
 
   // ─── Fast Synchronous / Reactive Computation ──────────────────────────────
 
-  static ScanLimitResult computeScanLimit(AppUser? appUser, AppConfig config) {
+  static ScanLimitResult computeScanLimit(AppUser? appUser, AppConfig config, {int localTodayCount = 0}) {
     if (appUser == null) {
       return const ScanLimitResult(canScan: false, reason: 'Not logged in');
     }
@@ -42,8 +42,21 @@ class ScanLimiter {
         );
       }
 
+      if (trialInfo.isNotStarted) {
+        return ScanLimitResult(
+          canScan: false,
+          remaining: 0,
+          limit: config.freeScanLimit,
+          tier: 'trial_not_started',
+          reason: 'Please activate your Trial to start scanning plants.',
+          isExpired: false,
+          isNotStarted: true,
+        );
+      }
+
       final limit = config.freeScanLimit;
-      final todayCount = appUser.todayScans;
+      final remoteToday = appUser.todayScans;
+      final todayCount = remoteToday > localTodayCount ? remoteToday : localTodayCount;
       final remaining = (limit - todayCount).clamp(0, limit);
 
       return ScanLimitResult(
@@ -77,7 +90,8 @@ class ScanLimiter {
       );
     }
 
-    final todayCount = appUser.todayScans;
+    final remoteToday = appUser.todayScans;
+    final todayCount = remoteToday > localTodayCount ? remoteToday : localTodayCount;
     final remaining = (limit - todayCount).clamp(0, limit);
 
     return ScanLimitResult(
@@ -114,6 +128,18 @@ class ScanLimiter {
           reason: 'Your Free Trial has ended. Please upgrade to Pro (${config.proPrice}/mo) or Farm Pack (${config.farmPrice}/mo) to continue chatting with the AI Plant Doctor.',
           isExpired: true,
           isNotStarted: false,
+        );
+      }
+
+      if (trialInfo.isNotStarted) {
+        return AiLimitResult(
+          canUse: false,
+          remaining: 0,
+          limit: config.freeAiLimit,
+          tier: 'trial_not_started',
+          reason: 'Please activate your Trial to chat with the AI Plant Doctor.',
+          isExpired: false,
+          isNotStarted: true,
         );
       }
 

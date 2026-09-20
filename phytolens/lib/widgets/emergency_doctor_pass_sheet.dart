@@ -8,9 +8,9 @@ import '../providers/app_config_provider.dart';
 import '../providers/user_provider.dart';
 import '../screens/ai/chatbot_screen.dart';
 import '../screens/subscription/upgrade_screen.dart';
+import '../screens/subscription/trial_activation_screen.dart';
 import '../services/payment_service.dart';
 import '../services/supabase_service.dart';
-import '../services/trial_service.dart';
 import '../theme/colors.dart';
 import 'bouncing_button.dart';
 
@@ -134,8 +134,7 @@ class _EmergencyDoctorPassSheetState extends ConsumerState<EmergencyDoctorPassSh
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider).value;
     final config = ref.watch(appConfigProvider).value ?? const AppConfig();
-    final trialInfo = TrialService.getTrialInfo(user, trialDays: config.trialDays);
-    final isAlreadyPro = user?.isPro == true || user?.isFarm == true || trialInfo.isActive;
+    final isAlreadyPro = user?.isPro == true || user?.isFarm == true;
 
     return Container(
       decoration: const BoxDecoration(
@@ -391,17 +390,43 @@ class _EmergencyDoctorPassSheetState extends ConsumerState<EmergencyDoctorPassSh
 
               const SizedBox(height: 10),
 
-              // Secondary actions: Free Doctor Chat & Upgrade Screen
+              // Secondary actions: AI Chat (access-controlled) & Upgrade Screen
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () {
+                        // ── ACCESS CONTROL: No free bypass to chat ──
+                        final aiLimit = ref.read(aiLimitProvider).value;
+                        final isLocked = aiLimit == null || aiLimit.isExpired || !aiLimit.canUse;
+                        
                         Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const ChatbotScreen()),
-                        );
+                        
+                        if (aiLimit?.isExpired == true) {
+                          // Trial ended → Upgrade
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const UpgradeScreen()),
+                          );
+                        } else if (aiLimit?.isNotStarted == true) {
+                          // Trial not activated yet → Activate Trial
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const TrialActivationScreen()),
+                          );
+                        } else if (isLocked) {
+                          // Daily limit reached or unknown state → Upgrade
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const UpgradeScreen()),
+                          );
+                        } else {
+                          // Active trial or paid tier → allow chat
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const ChatbotScreen()),
+                          );
+                        }
                       },
                       style: OutlinedButton.styleFrom(
                         side: BorderSide(color: Colors.grey.shade300),
@@ -411,7 +436,7 @@ class _EmergencyDoctorPassSheetState extends ConsumerState<EmergencyDoctorPassSh
                         ),
                       ),
                       child: const Text(
-                        'Standard Chat',
+                        'AI Doctor Chat',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,

@@ -6,7 +6,9 @@
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/local_database.dart';
+import '../data/chat_database.dart';
 import '../models/scan_result.dart';
 import 'supabase_service.dart';
 import 'gamification_service.dart';
@@ -21,6 +23,7 @@ class SyncService {
   final _supabase = SupabaseService();
   final _gamification = GamificationService();
   final _localDb = LocalDatabase();
+  final _chatDb = ChatDatabase();
   bool _isSyncing = false;
   
   // Expose stream for UI
@@ -61,52 +64,85 @@ class SyncService {
     try {
       final unsyncedScans = await _localDb.getUnsyncedScans();
       
-      if (unsyncedScans.isEmpty) {
-        _isSyncing = false;
-        return;
-      }
+      if (unsyncedScans.isNotEmpty) {
+        debugPrint('🔄 Syncing ${unsyncedScans.length} offline scans...');
 
-      debugPrint('🔄 Syncing ${unsyncedScans.length} offline scans...');
-
-      for (final scan in unsyncedScans) {
-        try {
-          var scanToSync = scan;
-          
-          // Upgrade offline/template remedies with cloud AI
-          if (scan.aiSource == 'offline' || scan.aiSource == 'template') {
-            try {
-              final groq = GroqService();
-              final tier = await SecureTierService().getCachedTierString();
-              final betterRemedy = await groq.getTieredAdvice(
-                tier: tier,
-                plantName: scan.plantName,
-                diseaseName: scan.diseaseName,
-                healthScore: scan.healthScore,
-              );
-              if (betterRemedy.isNotEmpty) {
-                scanToSync = scan.copyWith(
-                  remedy: betterRemedy, 
-                  aiSource: 'cloud_synced',
+        for (final scan in unsyncedScans) {
+          try {
+            var scanToSync = scan;
+            
+            // Upgrade offline/template remedies with cloud AI
+            if (scan.aiSource == 'offline' || scan.aiSource == 'template') {
+              try {
+                final groq = GroqService();
+                final tier = await SecureTierService().getCachedTierString();
+                final betterRemedy = await groq.getTieredAdvice(
+                  tier: tier,
+                  plantName: scan.plantName,
+                  diseaseName: scan.diseaseName,
+                  healthScore: scan.healthScore,
                 );
-                // Update local DB with better remedy
-                await _localDb.updateRemedy(scan.id, betterRemedy, 'cloud_synced');
+                if (betterRemedy.isNotEmpty) {
+                  scanToSync = scan.copyWith(
+                    remedy: betterRemedy, 
+                    aiSource: 'cloud_synced',
+                  );
+                  // Update local DB with better remedy
+                  await _localDb.updateRemedy(scan.id, betterRemedy, 'cloud_synced');
+                }
+              } catch (_) {
+                // Non-fatal, just upload with original offline remedy
               }
-            } catch (_) {
-              // Non-fatal, just upload with original offline remedy
             }
-          }
 
-          await _supabase.saveScan(scanToSync);
-          await _gamification.processScanReward(scanToSync.userId);
-          await _localDb.markSynced(scan.id);
-          debugPrint('✅ Synced scan: ${scan.id}');
-        } catch (e) {
-          debugPrint('❌ Failed to sync scan ${scan.id}: $e');
-          // Keep it unsynced for next attempt
+            await _supabase.saveScan(scanToSync);
+            await _gamification.processScanReward(scanToSync.userId);
+            await _localDb.markSynced(scan.id);
+            debugPrint('✅ Synced scan: ${scan.id}');
+          } catch (e) {
+            debugPrint('❌ Failed to sync scan ${scan.id}: $e');
+            // Keep it unsynced for next attempt
+          }
         }
       }
+
+      // Sync offline chatbot queries to count toward daily limits
+      await syncOfflineChatUsage();
     } finally {
       _isSyncing = false;
+    }
+  }
+
+  /// Sync unsynced offline chat usage counts to Supabase
+  Future<void> syncOfflineChatUsage() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return;
+      final userId = user.id;
+
+      final unsyncedMessages = await _chatDb.getUnsyncedOfflineMessages(userId);
+      if (unsyncedMessages.isEmpty) return;
+
+      debugPrint('🔄 Syncing ${unsyncedMessages.length} offline chat usages...');
+      final syncedIds = <int>[];
+
+      for (final msg in unsyncedMessages) {
+        final id = msg['id'] as int;
+        try {
+          final content = msg['content'] as String? ?? '';
+          await _supabase.recordAiUsage(userId, 'chatbot_offline', tokensUsed: content.length ~/ 4);
+          syncedIds.add(id);
+        } catch (e) {
+          debugPrint('❌ Failed to sync chat usage for msg $id: $e');
+        }
+      }
+
+      if (syncedIds.isNotEmpty) {
+        await _chatDb.markMessagesSynced(syncedIds);
+        debugPrint('✅ Synced ${syncedIds.length} offline chat messages to server limits.');
+      }
+    } catch (e) {
+      debugPrint('Sync offline chat usage error: $e');
     }
   }
 

@@ -5,7 +5,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -34,6 +33,8 @@ import '../profile/subscription_details_screen.dart';
 import '../../widgets/smooth_page_route.dart';
 import '../../widgets/bouncing_button.dart';
 import '../../widgets/emergency_doctor_pass_sheet.dart';
+import '../../widgets/glass_card.dart';
+import '../../widgets/glass_button.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -127,17 +128,27 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     _scansSub = _supabase.streamUserScans(uid).listen((scans) async {
       if (mounted) {
-        final recent = scans.take(5).toList();
-        final stats = await _supabase.getScanStats(uid);
+        // Cache all remote scans to local database
+        await _localDb.batchUpsertScans(scans, synced: true);
 
-        // Cache to local database for offline persistence
-        for (final s in recent) {
-          await _localDb.upsertScan(s, synced: true);
-        }
+        final allRecent = await _localDb.getRecentScans(uid, limit: 5);
+        final localStats = await _localDb.getUserStats(uid);
+        Map<String, dynamic> stats = {
+          'total': localStats['total_scans'] ?? 0,
+          'avgScore': localStats['avg_health'] ?? 0,
+          'diseaseCount': localStats['diseases_found'] ?? 0,
+        };
+
+        try {
+          final cloudStats = await _supabase.getScanStats(uid);
+          if ((cloudStats['total'] as int? ?? 0) >= (stats['total'] as int? ?? 0)) {
+            stats = cloudStats;
+          }
+        } catch (_) {}
 
         if (mounted) {
           setState(() {
-            _recentScans = recent;
+            _recentScans = allRecent.isNotEmpty ? allRecent : scans.take(5).toList();
             _stats = stats;
             _loading = false;
           });
@@ -208,10 +219,51 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.lightBg,
-      body: RefreshIndicator(
-        color: AppColors.primary,
-        backgroundColor: Colors.white,
-        onRefresh: () async {
+      body: Stack(
+        children: [
+          // Background ambient gradient for glassmorphism (hardware accelerated shader)
+          Positioned(
+            top: -150,
+            right: -100,
+            child: IgnorePointer(
+              child: Container(
+                width: 350,
+                height: 350,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      AppColors.primary.withValues(alpha: 0.16),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -50,
+            left: -100,
+            child: IgnorePointer(
+              child: Container(
+                width: 300,
+                height: 300,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      Color(0x206366F1),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          RefreshIndicator(
+            color: AppColors.primary,
+            backgroundColor: Colors.white,
+            onRefresh: () async {
           ref.read(scanLimitProvider.notifier).refreshLimit();
           ref.read(aiLimitProvider.notifier).refreshLimit();
           final uid = Supabase.instance.client.auth.currentUser?.id;
@@ -260,7 +312,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ],
                 ),
               ],
-            ).animate().fadeIn(duration: 350.ms).slideY(begin: -0.05, end: 0, curve: Curves.easeOutCubic),
+            ),
 
             const SizedBox(height: 14),
 
@@ -273,7 +325,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               totalScans: totalScans,
               avgScore: avgScore,
               diseaseCount: diseaseCount,
-            ).animate().fadeIn(duration: 400.ms, delay: 50.ms).slideY(begin: 0.04, end: 0, curve: Curves.easeOutCubic),
+            ),
 
             const SizedBox(height: 18),
 
@@ -282,8 +334,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               children: [
                 Expanded(
                   flex: 3,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
+                  child: GlassButton.action(
+                    label: 'Scan Plant Leaf',
+                    icon: Icons.camera_alt_rounded,
+                    style: GlassButtonStyle.emerald,
+                    onTap: () {
                       if (isAccessLocked) {
                         Navigator.push(
                           context,
@@ -307,30 +362,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ref.read(navIndexProvider.notifier).state = 1;
                       }
                     },
-                    icon: const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.white),
-                    label: const Text(
-                      'Scan Plant Leaf',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 0,
-                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   flex: 2,
-                  child: OutlinedButton.icon(
-                    onPressed: () {
+                  child: GlassButton.action(
+                    label: 'AI Doctor',
+                    icon: Icons.auto_awesome_rounded,
+                    style: GlassButtonStyle.adaptive,
+                    accentColor: AppColors.primary,
+                    onTap: () {
                       if (isAccessLocked || (aiLimit != null && !aiLimit.canChat && aiLimit.isExpired)) {
                         Navigator.push(
                           context,
@@ -348,26 +390,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         );
                       }
                     },
-                    icon: const Icon(Icons.auto_awesome_rounded, size: 16, color: AppColors.primary),
-                    label: const Text(
-                      'AI Doctor',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppColors.primary, width: 1.5),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
                   ),
                 ),
               ],
-            ).animate().fadeIn(duration: 400.ms, delay: 100.ms).slideY(begin: 0.04, end: 0, curve: Curves.easeOutCubic),
+            ),
 
             const SizedBox(height: 10),
 
@@ -375,8 +401,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () {
+                  child: GlassButton.action(
+                    label: 'Nearby Retailers (B2B)',
+                    icon: Icons.storefront_rounded,
+                    style: GlassButtonStyle.light,
+                    accentColor: AppColors.primaryDark,
+                    onTap: () {
                       if (isAccessLocked) {
                         Navigator.push(
                           context,
@@ -389,27 +419,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         );
                       }
                     },
-                    icon: const Icon(Icons.storefront_rounded, size: 16, color: AppColors.primaryDark),
-                    label: const Text(
-                      'Nearby Retailers (B2B)',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.primaryDark,
-                      ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppColors.primaryLight, width: 1.0),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      backgroundColor: const Color(0xFFF8FAFC),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
                   ),
                 ),
               ],
-            ).animate().fadeIn(duration: 400.ms, delay: 120.ms).slideY(begin: 0.04, end: 0, curve: Curves.easeOutCubic),
+            ),
 
             const SizedBox(height: 24),
 
@@ -423,16 +436,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   );
                 }
               },
-              child: Container(
+              child: GlassCard(
                 margin: const EdgeInsets.only(bottom: 16),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: isAccessLocked ? const Color(0xFFF8FAFC) : const Color(0xFFFFF7ED),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isAccessLocked ? const Color(0xFFE2E8F0) : const Color(0xFFFFEDD5),
-                  ),
-                ),
+                borderRadius: 20,
+                color: isAccessLocked ? const Color(0xFFF8FAFC) : const Color(0xFFFFF7ED),
+                borderColor: isAccessLocked ? const Color(0xFFE2E8F0) : const Color(0xFFFFEDD5),
+                blur: 16,
+                alpha: 0.75,
                 child: Row(
                   children: [
                     Container(
@@ -500,29 +511,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ],
                 ),
               ),
-            ).animate().fadeIn(duration: 400.ms, delay: 110.ms).slideY(begin: 0.04, end: 0, curve: Curves.easeOutCubic),
+            ),
 
             // ── Emergency Doctor Pass ───────────────────────────────────────
             BouncingButton(
               onTap: () => EmergencyDoctorPassSheet.show(context),
-              child: Container(
+              child: GlassCard(
                 margin: const EdgeInsets.only(bottom: 24),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF4F46E5).withValues(alpha: 0.25),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+                gradient: const LinearGradient(
+                  colors: [Color(0xCC6366F1), Color(0x994F46E5)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
+                borderRadius: 20,
+                borderColor: Colors.white.withValues(alpha: 0.2),
+                blur: 24,
                 child: Row(
                   children: [
                     Container(
@@ -561,18 +565,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ],
                 ),
               ),
-            ).animate().fadeIn(duration: 400.ms, delay: 115.ms).slideY(begin: 0.04, end: 0, curve: Curves.easeOutCubic),
+            ),
 
             // ── Spray Window Widget ───────────────────────────────────────
             if (isAccessLocked)
-              Container(
+              GlassCard(
                 margin: const EdgeInsets.only(bottom: 24),
                 padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
+                borderRadius: 20,
+                blur: 24,
+                alpha: 0.85,
                 child: Row(
                   children: [
                     Container(
@@ -622,35 +624,87 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
                   ],
                 ),
-              ).animate().fadeIn(duration: 400.ms, delay: 120.ms).slideY(begin: 0.04, end: 0, curve: Curves.easeOutCubic)
+              )
             else if (_sprayWindow != null)
-              Container(
+              GlassCard(
                 margin: const EdgeInsets.only(bottom: 24),
                 padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: _sprayWindow!.isOptimal ? const Color(0xFFD1FAE5) : const Color(0xFFFEF2F2),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: _sprayWindow!.isOptimal ? const Color(0xFFA7F3D0) : const Color(0xFFFECACA),
-                    width: 1,
-                  ),
-                ),
+                borderRadius: 20,
+                color: _sprayWindow!.isOptimal ? const Color(0xFFD1FAE5) : const Color(0xFFFEF2F2),
+                borderColor: _sprayWindow!.isOptimal ? const Color(0xFFA7F3D0) : const Color(0xFFFECACA),
+                blur: 16,
+                alpha: 0.75,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Weather description header with emoji
+                    Row(
+                      children: [
+                        Text(
+                          _sprayWindow!.current.weatherEmoji,
+                          style: const TextStyle(fontSize: 22),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _sprayWindow!.current.weatherDescription,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.lightTextPrimary,
+                                ),
+                              ),
+                              Text(
+                                'Feels like ${_sprayWindow!.current.feelsLike.toStringAsFixed(1)}°C',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.lightTextSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Rain probability badge
+                        if (_sprayWindow!.current.precipitationProbability > 0)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: _sprayWindow!.current.precipitationProbability >= 30
+                                  ? const Color(0xFFFEE2E2)
+                                  : const Color(0xFFF0F9FF),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '🌧️ ${_sprayWindow!.current.precipitationProbability}%',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: _sprayWindow!.current.precipitationProbability >= 30
+                                    ? const Color(0xFFB91C1C)
+                                    : const Color(0xFF0369A1),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    // Spray status
                     Row(
                       children: [
                         Icon(
                           _sprayWindow!.isOptimal ? Icons.check_circle_rounded : Icons.warning_rounded,
                           color: _sprayWindow!.isOptimal ? AppColors.primary : AppColors.error,
-                          size: 20,
+                          size: 18,
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            'Spray Window: ${_sprayWindow!.isOptimal ? "Optimal" : "Not Ideal"}',
+                            'Spray Window: ${_sprayWindow!.isOptimal ? "Optimal ✓" : "Not Ideal"}',
                             style: TextStyle(
-                              fontSize: 15,
+                              fontSize: 14,
                               fontWeight: FontWeight.w700,
                               color: _sprayWindow!.isOptimal ? AppColors.primary : AppColors.error,
                             ),
@@ -658,7 +712,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Text(
                       _sprayWindow!.message,
                       style: TextStyle(
@@ -682,14 +736,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _buildWeatherStat(Icons.thermostat, '${_sprayWindow!.current.temperature}°C', _sprayWindow!.isOptimal),
-                        _buildWeatherStat(Icons.air, '${_sprayWindow!.current.windSpeed} km/h', _sprayWindow!.isOptimal),
-                        _buildWeatherStat(Icons.water_drop, '${_sprayWindow!.current.precipitation} mm', _sprayWindow!.isOptimal),
+                        _buildWeatherStat(Icons.thermostat, '${_sprayWindow!.current.temperature.toStringAsFixed(1)}°C', _sprayWindow!.isOptimal),
+                        _buildWeatherStat(Icons.air, '${_sprayWindow!.current.windSpeed.toStringAsFixed(1)} km/h', _sprayWindow!.isOptimal),
+                        _buildWeatherStat(Icons.opacity, '${_sprayWindow!.current.humidity.toStringAsFixed(0)}%', _sprayWindow!.isOptimal),
+                        _buildWeatherStat(Icons.water_drop, '${_sprayWindow!.current.precipitation.toStringAsFixed(1)} mm', _sprayWindow!.isOptimal),
                       ],
                     ),
                   ],
                 ),
-              ).animate().fadeIn(duration: 400.ms, delay: 120.ms).slideY(begin: 0.04, end: 0, curve: Curves.easeOutCubic),
+              ),
+
 
             // ── Recent Diagnoses Header ─────────────────────────────────────
             Row(
@@ -726,7 +782,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
                   ),
               ],
-            ).animate().fadeIn(duration: 350.ms, delay: 150.ms),
+            ),
 
             const SizedBox(height: 10),
 
@@ -780,21 +836,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
                   ],
                 ),
-              ).animate().fadeIn(duration: 350.ms, delay: 180.ms)
+              )
             else
               ..._recentScans.asMap().entries.map((entry) {
-                final index = entry.key;
                 final scan = entry.value;
-                return _buildRecentScanCard(scan, isAccessLocked: isAccessLocked)
-                    .animate()
-                    .fadeIn(duration: 300.ms, delay: (180 + (index * 40)).ms)
-                    .slideX(begin: 0.03, end: 0, curve: Curves.easeOutCubic);
+                return _buildRecentScanCard(scan, isAccessLocked: isAccessLocked);
               }),
-          ],
+            ],
+          ),
         ),
-      ),
-    );
-  }
+      ],
+    ),
+  );
+}
 
   // ═════════════════════════════════════════════════════════════════════════
   // CONSOLIDATED UNIFIED STATUS CARD
@@ -856,11 +910,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       badgeColor = AppColors.error;
       badgeBg = const Color(0xFFFEE2E2);
     } else if (isNotStarted) {
-      badgeLabel = '🌱 ${cfg.trialDays}-DAY FREE TRIAL';
+      badgeLabel = '🌱 ${cfg.trialDays}-DAY TRIAL';
       badgeColor = AppColors.primaryDark;
       badgeBg = const Color(0xFFD1FAE5);
     } else {
-      badgeLabel = '🌱 ${trialInfo.remainingDays}D FREE TRIAL ACTIVE';
+      badgeLabel = '🌱 ${trialInfo.remainingDays}D TRIAL ACTIVE';
       badgeColor = AppColors.primaryDark;
       badgeBg = const Color(0xFFD1FAE5);
     }
@@ -891,20 +945,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       );
     }
 
-    return Container(
+    return GlassCard(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x06000000),
-            blurRadius: 10,
-            offset: Offset(0, 3),
-          ),
-        ],
-      ),
+      borderRadius: 22,
+      blur: 24,
+      alpha: 0.85,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1224,22 +1269,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           );
         }
       },
-      child: Container(
+      child: GlassCard(
         margin: const EdgeInsets.only(bottom: 10),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: const Border.fromBorderSide(
-            BorderSide(color: Color(0xFFE2E8F0)),
-          ),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x070F172A),
-              blurRadius: 4,
-              offset: Offset(0, 1),
-            ),
-          ],
-        ),
+        borderRadius: 16,
+        blur: 16,
+        alpha: 0.85,
         child: ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           leading: Container(

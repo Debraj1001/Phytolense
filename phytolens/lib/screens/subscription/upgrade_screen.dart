@@ -14,6 +14,7 @@ import '../../services/payment_service.dart';
 import '../../services/trial_service.dart';
 import '../../theme/colors.dart';
 import '../../widgets/loading_dots.dart';
+import '../../widgets/glass_button.dart';
 
 class UpgradeScreen extends ConsumerStatefulWidget {
   final bool isPro;
@@ -161,33 +162,23 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: Row(
                 children: [
-                  GestureDetector(
+                  GlassButton.close(
                     onTap: () => Navigator.pop(context),
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF374151)),
-                    ),
                   ),
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFECFDF5),
+                      color: const Color(0xFFECFDF5).withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: const Color(0xFFA7F3D0)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.08),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
@@ -198,7 +189,7 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
                           'No Auto-Debit',
                           style: TextStyle(
                             fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w700,
                             color: AppColors.primaryDark,
                           ),
                         ),

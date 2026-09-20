@@ -1,6 +1,7 @@
 // lib/screens/home/home_screen.dart
 // Soft Botanical Minimalism — white pill nav, no glassmorphism.
 
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -123,29 +124,9 @@ class HomeScreen extends ConsumerWidget {
         children: [
           const OfflineBanner(),
           Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 260),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              transitionBuilder: (child, animation) {
-                return FadeTransition(
-                  opacity: CurvedAnimation(
-                    parent: animation,
-                    curve: const Interval(0.2, 1.0, curve: Curves.easeOut),
-                  ),
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, 0.015),
-                      end: Offset.zero,
-                    ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
-                    child: child,
-                  ),
-                );
-              },
-              child: KeyedSubtree(
-                key: ValueKey<int>(idx),
-                child: _screens[idx.clamp(0, _screens.length - 1)],
-              ),
+            child: IndexedStack(
+              index: idx.clamp(0, _screens.length - 1),
+              children: _screens,
             ),
           ),
         ],
@@ -153,56 +134,68 @@ class HomeScreen extends ConsumerWidget {
 
       extendBody: true,
 
-      // ── White Pill Bottom Nav ────────────────────────────────────────────
+      // ── Frosted Glass Floating Bottom Nav ────────────────────────────────
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
           child: Container(
-            height: 66,
+            height: 68,
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-              border: const Border.fromBorderSide(
-                BorderSide(color: Color(0xFFE2E8F0), width: 1),
-              ),
+              borderRadius: BorderRadius.circular(32),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0x100F172A),
-                  blurRadius: 16,
-                  spreadRadius: 0,
-                  offset: const Offset(0, 4),
+                  color: const Color(0x140F172A),
+                  blurRadius: 24,
+                  spreadRadius: -2,
+                  offset: const Offset(0, 8),
                 ),
                 BoxShadow(
-                  color: const Color(0x060F172A),
-                  blurRadius: 4,
-                  offset: const Offset(0, 1),
+                  color: const Color(0x080F172A),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
-            child: Row(
-              children: [
-                _LightNavItem(
-                  icon: Icons.yard_outlined,
-                  activeIcon: Icons.yard_rounded,
-                  label: 'Plants',
-                  isSelected: idx == 0,
-                  onTap: () => ref.read(navIndexProvider.notifier).state = 0,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(32),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.88),
+                    borderRadius: BorderRadius.circular(32),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.95),
+                      width: 1.2,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      _LightNavItem(
+                        icon: Icons.yard_outlined,
+                        activeIcon: Icons.yard_rounded,
+                        label: 'Plants',
+                        isSelected: idx == 0,
+                        onTap: () => ref.read(navIndexProvider.notifier).state = 0,
+                      ),
+                      _LightNavItem(
+                        icon: Icons.filter_center_focus_rounded,
+                        activeIcon: Icons.filter_center_focus_rounded,
+                        label: 'Scan',
+                        isSelected: idx == 1,
+                        onTap: () => ref.read(navIndexProvider.notifier).state = 1,
+                      ),
+                      _LightNavItem(
+                        icon: Icons.auto_stories_outlined,
+                        activeIcon: Icons.auto_stories_rounded,
+                        label: 'Care Log',
+                        isSelected: idx == 2,
+                        onTap: () => ref.read(navIndexProvider.notifier).state = 2,
+                      ),
+                    ],
+                  ),
                 ),
-                _LightNavItem(
-                  icon: Icons.filter_center_focus_rounded,
-                  activeIcon: Icons.filter_center_focus_rounded,
-                  label: 'Scan',
-                  isSelected: idx == 1,
-                  onTap: () => ref.read(navIndexProvider.notifier).state = 1,
-                ),
-                _LightNavItem(
-                  icon: Icons.auto_stories_outlined,
-                  activeIcon: Icons.auto_stories_rounded,
-                  label: 'Care Log',
-                  isSelected: idx == 2,
-                  onTap: () => ref.read(navIndexProvider.notifier).state = 2,
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -282,9 +275,24 @@ class _LightNavItemState extends State<_LightNavItem>
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
               decoration: BoxDecoration(
                 color: widget.isSelected
-                    ? const Color(0xFFD1FAE5)
+                    ? const Color(0xFFD1FAE5).withValues(alpha: 0.9)
                     : Colors.transparent,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(18),
+                border: widget.isSelected
+                    ? Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.25),
+                        width: 1,
+                      )
+                    : null,
+                boxShadow: widget.isSelected
+                    ? [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.12),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
+                    : null,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,

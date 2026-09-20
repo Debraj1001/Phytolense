@@ -23,6 +23,7 @@ import 'dart:async';
 import '../../providers/app_config_provider.dart';
 import '../../providers/ai_settings_provider.dart';
 import '../subscription/upgrade_screen.dart';
+import '../../widgets/glass_button.dart';
 import '../subscription/trial_activation_screen.dart';
 import 'result_screen.dart';
 import '../home/home_screen.dart';
@@ -244,7 +245,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
       // ── Prepare ScanResult (User will choose whether to save) ────────
       final uid = Supabase.instance.client.auth.currentUser?.id ?? '';
       final scanResult = ScanResult(
-        id: 'scan_${DateTime.now().millisecondsSinceEpoch}',
+        id: 'temp_${DateTime.now().millisecondsSinceEpoch}',
         userId: uid,
         diseaseName: diseaseName,
         diseaseConfidence: confidence,
@@ -256,8 +257,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
         aiSource: aiSource,
       );
 
-      // ── Save to local DB immediately (offline-first) ──────────────────
-      await _localDb.upsertScan(scanResult, synced: isOnline);
+      // ── Save to local DB immediately (offline-first, marked unsynced until saved) ──
+      await _localDb.upsertScan(scanResult, synced: false);
 
       if (mounted) {
         setState(() => _analyzing = false);
@@ -561,9 +562,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
         appBar: AppBar(
           backgroundColor: Colors.white,
           elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, size: 18, color: AppColors.textPrimary),
-            onPressed: () => ref.read(navIndexProvider.notifier).state = 0,
+          leading: Center(
+            child: GlassButton.back(
+              onTap: () => ref.read(navIndexProvider.notifier).state = 0,
+            ),
           ),
           title: const Text('PhytoLens Scanner', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700, fontSize: 18)),
         ),
@@ -689,7 +691,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(28),
                     child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                      filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         decoration: BoxDecoration(
@@ -704,24 +706,12 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
                             // Gallery Button
-                            BouncingButton(
+                            GlassButton(
+                              size: 46,
+                              icon: Icons.photo_library_outlined,
+                              iconSize: 22,
+                              tooltip: 'Gallery',
                               onTap: _analyzing ? null : () => _pickImage(ImageSource.gallery),
-                              child: Container(
-                                width: 46,
-                                height: 46,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: const Color(0xFFF1F5F9),
-                                  border: Border.all(
-                                    color: const Color(0xFFE2E8F0),
-                                  ),
-                                ),
-                                child: const Icon(
-                                  Icons.photo_library_outlined,
-                                  size: 21,
-                                  color: AppColors.lightTextPrimary,
-                                ),
-                              ),
                             ),
 
                             // Camera Capture Button
@@ -730,24 +720,12 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
                             ),
 
                             // Tips / Info Button
-                            BouncingButton(
+                            GlassButton(
+                              size: 46,
+                              icon: Icons.info_outline_rounded,
+                              iconSize: 22,
+                              tooltip: 'Tips',
                               onTap: _showTips,
-                              child: Container(
-                                width: 46,
-                                height: 46,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: const Color(0xFFF1F5F9),
-                                  border: Border.all(
-                                    color: const Color(0xFFE2E8F0),
-                                  ),
-                                ),
-                                child: const Icon(
-                                  Icons.info_outline_rounded,
-                                  size: 21,
-                                  color: AppColors.lightTextPrimary,
-                                ),
-                              ),
                             ),
                           ],
                         ),

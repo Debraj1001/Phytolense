@@ -76,16 +76,17 @@ class _ScanHistoryScreenState extends ConsumerState<ScanHistoryScreen> {
     }
 
     // 2. Stream from Supabase if online, and cache new scans
-    _sub = _supabase.streamUserScans(uid).listen((scans) async {
+    _sub = _supabase.streamUserScans(uid).listen((cloudScans) async {
       if (mounted) {
-        for (final s in scans) {
-          await _localDb.upsertScan(s, synced: true);
+        await _localDb.batchUpsertScans(cloudScans, synced: true);
+        final combined = await _localDb.getUserScans(uid);
+        if (mounted) {
+          setState(() {
+            _scans = combined.isNotEmpty ? combined : cloudScans;
+            _applyFilter();
+            _loading = false;
+          });
         }
-        setState(() {
-          _scans = scans;
-          _applyFilter();
-          _loading = false;
-        });
       }
     }, onError: (e) {
       debugPrint('Supabase stream error (offline): $e');
@@ -663,8 +664,8 @@ class _ScanHistoryTile extends StatelessWidget {
         ),
       ),
     ),
-  ).animate(delay: const Duration(milliseconds: 50)).fadeIn().slideX(begin: 0.05, end: 0);
-  }
+  );
+}
 
   Widget _buildThumbnailImage(ScanResult scan) {
     if (scan.imageUrl == null || scan.imageUrl!.isEmpty) {

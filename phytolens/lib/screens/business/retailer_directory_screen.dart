@@ -8,6 +8,7 @@ import '../../providers/user_provider.dart';
 import '../../providers/app_config_provider.dart';
 import '../../services/trial_service.dart';
 import '../subscription/upgrade_screen.dart';
+import '../../widgets/glass_button.dart';
 
 class RetailerDirectoryScreen extends ConsumerStatefulWidget {
   const RetailerDirectoryScreen({super.key});
@@ -58,6 +59,9 @@ class _RetailerDirectoryScreenState extends ConsumerState<RetailerDirectoryScree
       backgroundColor: AppColors.lightBg,
       appBar: AppBar(
         backgroundColor: Colors.white,
+        leading: Center(
+          child: GlassButton.back(),
+        ),
         title: Text(
           'Nearby Retailers',
           style: GoogleFonts.plusJakartaSans(

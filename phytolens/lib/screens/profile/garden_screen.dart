@@ -13,6 +13,7 @@ import '../../data/supported_crops.dart';
 import '../subscription/upgrade_screen.dart';
 import '../subscription/trial_activation_screen.dart';
 import 'plant_detail_screen.dart';
+import '../../widgets/glass_button.dart';
 
 class GardenScreen extends StatefulWidget {
   const GardenScreen({super.key});
@@ -80,15 +81,23 @@ class _GardenScreenState extends State<GardenScreen> {
             color: AppColors.textPrimary,
           ),
         ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 18, color: AppColors.textPrimary),
-          onPressed: () => Navigator.pop(context),
+        leading: Center(
+          child: GlassButton.back(),
         ),
         actions: [
           if (_isPaid)
-            IconButton(
-              icon: const Icon(Icons.add, size: 24, color: AppColors.primary),
-              onPressed: _addPlant,
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Center(
+                child: GlassButton(
+                  size: 38,
+                  icon: Icons.add_rounded,
+                  iconSize: 20,
+                  style: GlassButtonStyle.emerald,
+                  tooltip: 'Add Plant',
+                  onTap: _addPlant,
+                ),
+              ),
             ),
         ],
       ),

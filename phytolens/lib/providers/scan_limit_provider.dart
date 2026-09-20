@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/scan_limiter.dart';
 import '../services/supabase_service.dart';
+import '../data/local_database.dart';
 import 'user_provider.dart';
 import 'app_config_provider.dart';
 
@@ -33,7 +34,18 @@ class ScanLimitNotifier extends StateNotifier<AsyncValue<ScanLimitResult>> {
           ? await SupabaseService().getUser(currentUid)
           : null);
 
-      final result = ScanLimiter.computeScanLimit(effectiveUser, effectiveConfig);
+      int localTodayCount = 0;
+      if (currentUid != null && currentUid.isNotEmpty) {
+        try {
+          localTodayCount = await LocalDatabase().getTodayScanCount(currentUid);
+        } catch (_) {}
+      }
+
+      final result = ScanLimiter.computeScanLimit(
+        effectiveUser,
+        effectiveConfig,
+        localTodayCount: localTodayCount,
+      );
       state = AsyncValue.data(result);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -41,7 +53,7 @@ class ScanLimitNotifier extends StateNotifier<AsyncValue<ScanLimitResult>> {
   }
 
   Future<void> recordScan() async {
-    await refreshLimit();
     _ref.invalidate(currentUserProvider);
+    await refreshLimit();
   }
 }

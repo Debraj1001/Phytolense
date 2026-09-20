@@ -2,33 +2,39 @@
 //
 // On-device Offline AI service with 2-tier fallback:
 //   Tier 0: Agronomy Knowledge Base (instant, <30KB, bundled in APK)
-//   Tier 1: Optional SLM — Gemma 2B Q4_K_M (~1.5GB, downloaded on demand)
+//   Tier 1: Optional SLM — TinyLlama 1.1B Q4_K_M (~669MB, downloaded on demand)
 //
 // The SLM is OPTIONAL — the app works fully offline without it.
 // The SLM enhances chat and provides freeform answers beyond the KB.
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:fllama/fllama.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/app_user.dart';
+import '../models/scan_result.dart';
 import 'agronomy_kb_service.dart';
+import 'supabase_service.dart';
 
-class LocalLLMService {
+class LocalLLMService extends ChangeNotifier {
   static final LocalLLMService _instance = LocalLLMService._internal();
   factory LocalLLMService() => _instance;
   LocalLLMService._internal();
 
   // ── Model Configuration ─────────────────────────────────────────────────
-  // Gemma 2B Instruct Q4_K_M — best quality/size ratio for agriculture
-  static const String _modelFileName = 'gemma-2b-it-q4_k_m.gguf';
+  // TinyLlama 1.1B Chat Q4_K_M — compact and fast for offline mobile inference
+  static const String _modelFileName = 'tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf';
   static const String _modelUrl =
-      'https://huggingface.co/google/gemma-2b-it-GGUF/resolve/main/gemma-2b-it-q4_k_m.gguf';
-  static const int _modelSizeBytes = 1500000000; // ~1.5GB approximate
+      'https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf';
+  static const int _modelSizeBytes = 669000000; // ~669MB approximate
   static const String _modelVersionKey = 'local_llm_version';
-  static const String _currentVersion = 'gemma-2b-it-q4_k_m-v1';
+  static const String _currentVersion = 'tinyllama-1.1b-chat-v1';
+  static const String _userContextKey = 'offline_user_context';
 
   // ── State ───────────────────────────────────────────────────────────────
   bool _isModelLoaded = false;
@@ -37,6 +43,7 @@ class LocalLLMService {
   double _downloadProgress = 0.0;
   String? _modelPath;
   double? _contextId;
+  http.Client? _httpClient; // Stored for cancellation
 
   bool get isModelLoaded => _isModelLoaded;
   bool get isDownloading => _isDownloading;
@@ -44,14 +51,147 @@ class LocalLLMService {
   double get downloadProgress => _downloadProgress;
   bool get isModelAvailable => _modelPath != null && File(_modelPath!).existsSync();
 
-  // ── System Prompt ───────────────────────────────────────────────────────
-  static const String _systemPrompt = '''You are PhytoLens AI, an expert plant health advisor.
+  // ═══════════════════════════════════════════════════════════════════════
+  // USER CONTEXT INJECTION
+  // Feed user data to the offline model so it knows who it's talking to.
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /// Cache user profile + recent scan history for offline LLM context.
+  /// Call this after model download and whenever the app starts online.
+  Future<void> feedUserContext(AppUser user, List<ScanResult> recentScans) async {
+    final scanSummaries = recentScans.take(20).map((s) {
+      return '- ${s.plantName}: ${s.diseaseName} (Health: ${s.healthScore}/100, ${s.scannedAt.toString().substring(0, 10)})';
+    }).join('\n');
+
+    final context = {
+      'name': user.displayName,
+      'tier': user.subscriptionTier,
+      'location': user.location ?? 'Unknown',
+      'garden_type': user.gardenType ?? 'Unknown',
+      'bio': user.bio ?? '',
+      'level': user.level,
+      'level_title': user.levelTitle,
+      'xp': user.xp,
+      'scan_count': user.scanCount,
+      'badges': user.badges.join(', '),
+      'recent_scans': scanSummaries,
+    };
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_userContextKey, jsonEncode(context));
+    debugPrint('📋 Cached user context for offline LLM: ${user.displayName}');
+  }
+
+  /// Build an enriched system prompt with cached user context.
+  Future<String> _buildSystemPrompt() async {
+    String userBlock = 'User Tier: Free';
+
+    // Try to load cached offline context first
+    final prefs = await SharedPreferences.getInstance();
+    final cachedJson = prefs.getString(_userContextKey);
+
+    if (cachedJson != null) {
+      try {
+        final ctx = jsonDecode(cachedJson) as Map<String, dynamic>;
+        final name = ctx['name'] ?? 'User';
+        final tier = ctx['tier'] ?? 'free';
+        final location = ctx['location'] ?? 'Unknown';
+        final gardenType = ctx['garden_type'] ?? 'Unknown';
+        final level = ctx['level_title'] ?? 'Seedling';
+        final scanCount = ctx['scan_count'] ?? 0;
+        final recentScans = ctx['recent_scans'] ?? 'No recent scans';
+
+        userBlock = '''User Profile:
+Name: $name
+Subscription: $tier
+Location: $location
+Garden Type: $gardenType
+Experience: $level ($scanCount total scans)
+
+Recent Scan History:
+$recentScans''';
+      } catch (_) {}
+    } else {
+      // Fallback: try live Supabase fetch (works when online)
+      final uid = Supabase.instance.client.auth.currentUser?.id;
+      if (uid != null) {
+        try {
+          final user = await SupabaseService().getUser(uid);
+          if (user != null) {
+            final isFarm = user.isFarm;
+            final isPro = user.isPro;
+            String tier = isFarm ? 'Farm' : (isPro ? 'Pro' : 'Free (Basic)');
+            userBlock = 'User Tier: $tier\nDisplay Name: ${user.displayName}';
+          }
+        } catch (_) {}
+      }
+    }
+
+    return '''You are PhytoLens AI, an expert plant health advisor.
 You help farmers and gardeners understand plant diseases and treatments.
-Always respond in simple, practical language that an uneducated farmer can understand.
-If the user writes in Hindi, respond in Hindi. If in any other language, respond in that language.
-Give actionable, step-by-step advice. Be encouraging and supportive.
-Keep responses concise and easy to understand.
-Use simple words, avoid technical jargon. Think of explaining to a friend who grows crops.''';
+
+CRITICAL INSTRUCTIONS:
+1. Be extremely brief and concise. Keep responses to 1-3 sentences unless specifically asked for details.
+2. NEVER output code, programming syntax, HTML tags, or technical markup.
+3. NEVER wrap your response in code fences or backticks.
+4. Use simple, conversational language. Write like a friendly expert, not a computer.
+5. Use bullet points (•) for lists, not markdown syntax.
+6. If the user writes in Hindi, respond in Hindi.
+
+PRIVACY: You are communicating ONLY with the user described below. Never reference or share information about other users.
+
+$userBlock
+
+Give actionable advice. Be encouraging. Use simple words.''';
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // RESPONSE CLEANING
+  // Strips code leakage, thinking tokens, and formatting artifacts.
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /// Clean raw LLM output to remove code leakage and formatting artifacts.
+  static String cleanResponse(String raw) {
+    var text = raw;
+
+    // Strip <think>...</think> blocks (reasoning model leakage)
+    text = text.replaceAll(RegExp(r'<think>[\s\S]*?</think>', caseSensitive: false), '');
+
+    // Strip orphaned <think> or </think> tags
+    text = text.replaceAll(RegExp(r'</?think>', caseSensitive: false), '');
+
+    // Strip stray HTML-like tags (but preserve markdown bold/italic)
+    text = text.replaceAll(RegExp(r'<(?!/?(?:b|i|em|strong)>)[^>]+>', caseSensitive: false), '');
+
+    // Strip code fences wrapping non-code text
+    // Only remove if the content doesn't look like actual code
+    text = text.replaceAllMapped(
+      RegExp(r'```(?:\w*)\n?([\s\S]*?)```'),
+      (match) {
+        final content = match.group(1) ?? '';
+        // If it contains programming keywords, keep the fence
+        final looksLikeCode = RegExp(r'(?:def |class |import |function |var |const |let |return |if \(|for \()').hasMatch(content);
+        return looksLikeCode ? match.group(0)! : content;
+      },
+    );
+
+    // Strip lone backticks wrapping normal words
+    text = text.replaceAllMapped(
+      RegExp(r'`([^`\n]{1,50})`'),
+      (match) {
+        final inner = match.group(1) ?? '';
+        // Keep backticks if it looks like a technical term
+        final isTechnical = RegExp(r'[_\.\(\)\[\]{}=<>]').hasMatch(inner);
+        return isTechnical ? match.group(0)! : inner;
+      },
+    );
+
+    // Clean up excessive whitespace
+    text = text.replaceAll(RegExp(r'\n{3,}'), '\n\n');
+    text = text.trim();
+
+    return text;
+  }
 
   // ═══════════════════════════════════════════════════════════════════════
   // MODEL MANAGEMENT
@@ -73,6 +213,12 @@ Use simple words, avoid technical jargon. Think of explaining to a friend who gr
     return '${dir.path}/$_modelFileName';
   }
 
+  /// Returns the path to the temporary download file
+  Future<String> _getTempFilePath() async {
+    final filePath = await _getModelFilePath();
+    return '$filePath.download';
+  }
+
   /// Check if the model is already downloaded and valid
   Future<bool> isModelDownloaded() async {
     try {
@@ -80,10 +226,10 @@ Use simple words, avoid technical jargon. Think of explaining to a friend who gr
       final file = File(path);
       if (await file.exists()) {
         final size = await file.length();
-        // Model should be at least 1GB to be valid
-        if (size > 1000000000) {
-          _modelPath = path;
-          return true;
+        // Model should be at least 400MB to be valid
+        if (size > 400000000) {
+           _modelPath = path;
+           return true;
         }
         // Corrupted / incomplete download — delete it
         await file.delete();
@@ -95,7 +241,21 @@ Use simple words, avoid technical jargon. Think of explaining to a friend who gr
     }
   }
 
-  /// Download the model with progress callback
+  /// Check if a partial download exists and return its size in bytes.
+  /// Returns 0 if no partial file exists.
+  Future<int> getPartialDownloadSizeBytes() async {
+    try {
+      final tempPath = await _getTempFilePath();
+      final tempFile = File(tempPath);
+      if (await tempFile.exists()) {
+        return await tempFile.length();
+      }
+    } catch (_) {}
+    return 0;
+  }
+
+  /// Download the model with progress callback.
+  /// Supports resumption from partial downloads automatically.
   /// [onProgress] receives a value between 0.0 and 1.0
   Future<bool> downloadModel({
     required Function(double progress) onProgress,
@@ -104,6 +264,7 @@ Use simple words, avoid technical jargon. Think of explaining to a friend who gr
     if (_isDownloading) return false;
     _isDownloading = true;
     _downloadProgress = 0.0;
+    notifyListeners();
 
     try {
       final filePath = await _getModelFilePath();
@@ -114,39 +275,61 @@ Use simple words, avoid technical jargon. Think of explaining to a friend who gr
       int downloadedBytes = 0;
       if (await tempFile.exists()) {
         downloadedBytes = await tempFile.length();
+        debugPrint('📥 Resuming download from ${(downloadedBytes / 1024 / 1024).toStringAsFixed(1)} MB');
       }
 
-      final client = http.Client();
+      _httpClient = http.Client();
       final request = http.Request('GET', Uri.parse(_modelUrl));
       if (downloadedBytes > 0) {
         request.headers['Range'] = 'bytes=$downloadedBytes-';
       }
 
-      final response = await client.send(request);
+      final response = await _httpClient!.send(request);
+
+      // Check if server supports range requests
+      if (downloadedBytes > 0 && response.statusCode == 200) {
+        // Server didn't honor Range header, restart from scratch
+        downloadedBytes = 0;
+        if (await tempFile.exists()) await tempFile.delete();
+      }
 
       // Get total size
       final totalBytes = downloadedBytes +
           (response.contentLength ?? (_modelSizeBytes - downloadedBytes));
 
-      final sink = tempFile.openWrite(mode: FileMode.append);
+      final sink = tempFile.openWrite(
+        mode: downloadedBytes > 0 && response.statusCode == 206
+            ? FileMode.append
+            : FileMode.write,
+      );
 
       await for (final chunk in response.stream) {
+        if (!_isDownloading) {
+          // Download was cancelled
+          await sink.flush();
+          await sink.close();
+          notifyListeners();
+          return false;
+        }
         sink.add(chunk);
         downloadedBytes += chunk.length;
         _downloadProgress = (downloadedBytes / totalBytes).clamp(0.0, 1.0);
         onProgress(_downloadProgress);
+        notifyListeners();
       }
 
       await sink.flush();
       await sink.close();
-      client.close();
+      _httpClient?.close();
+      _httpClient = null;
 
       // Validate downloaded file
       final downloadedSize = await tempFile.length();
-      if (downloadedSize < 1000000000) {
+      if (downloadedSize < 400000000) {
         await tempFile.delete();
         onError?.call('Download incomplete. Please try again.');
         _isDownloading = false;
+        notifyListeners();
         return false;
       }
 
@@ -160,13 +343,42 @@ Use simple words, avoid technical jargon. Think of explaining to a friend who gr
 
       _isDownloading = false;
       _downloadProgress = 1.0;
+      notifyListeners();
       return true;
     } catch (e) {
       debugPrint('Model download error: $e');
       onError?.call('Download failed. Check your internet connection.');
       _isDownloading = false;
+      _httpClient?.close();
+      _httpClient = null;
+      notifyListeners();
       return false;
     }
+  }
+
+  /// Cancel an in-progress download. The partial file is preserved for resume.
+  void cancelDownload() {
+    if (!_isDownloading) return;
+    _isDownloading = false;
+    _httpClient?.close();
+    _httpClient = null;
+    debugPrint('⏹️ Download cancelled. Partial file preserved for resume.');
+    notifyListeners();
+  }
+
+  /// Delete the partial download file to start fresh.
+  Future<void> cleanPartialDownload() async {
+    try {
+      final tempPath = await _getTempFilePath();
+      final tempFile = File(tempPath);
+      if (await tempFile.exists()) {
+        await tempFile.delete();
+        debugPrint('🧹 Cleaned partial download file.');
+      }
+    } catch (e) {
+      debugPrint('Clean partial error: $e');
+    }
+    notifyListeners();
   }
 
   /// Get the model file size for display (in MB)
@@ -182,15 +394,18 @@ Use simple words, avoid technical jargon. Think of explaining to a friend who gr
       if (await file.exists()) {
         await file.delete();
       }
+      // Also clean any partial download
+      await cleanPartialDownload();
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_modelVersionKey);
     } catch (e) {
       debugPrint('Model delete error: $e');
     }
+    notifyListeners();
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // MODEL LOADING (simulated until fllama package integration)
+  // MODEL LOADING
   // ═══════════════════════════════════════════════════════════════════════
 
   /// Load the model into memory for inference.
@@ -213,6 +428,7 @@ Use simple words, avoid technical jargon. Think of explaining to a friend who gr
       if (_contextId != null) {
         _isModelLoaded = true;
         debugPrint('✅ Local LLM loaded: $_modelPath, Context ID: $_contextId');
+        notifyListeners();
         return true;
       }
       
@@ -232,6 +448,7 @@ Use simple words, avoid technical jargon. Think of explaining to a friend who gr
       _contextId = null;
     }
     _isModelLoaded = false;
+    notifyListeners();
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -320,7 +537,8 @@ Use simple words, avoid technical jargon. Think of explaining to a friend who gr
       }
 
       try {
-        return await _runInference(prompt);
+        final raw = await _runInference(prompt);
+        return cleanResponse(raw);
       } catch (e) {
         debugPrint('SLM inference failed, using KB fallback: $e');
       }
@@ -339,7 +557,8 @@ Use simple words, avoid technical jargon. Think of explaining to a friend who gr
     _isGenerating = true;
 
     try {
-      final prompt = '<start_of_turn>system\\n$_systemPrompt<end_of_turn>\\n'
+      final sysPrompt = await _buildSystemPrompt();
+      final prompt = '<start_of_turn>system\\n$sysPrompt<end_of_turn>\\n'
                      '<start_of_turn>user\\n$userPrompt<end_of_turn>\\n'
                      '<start_of_turn>model\\n';
                      
@@ -389,10 +608,11 @@ Use simple words, avoid technical jargon. Think of explaining to a friend who gr
     _isGenerating = true;
 
     try {
+      final sysPrompt = await _buildSystemPrompt();
       // Build conversation context
       final StringBuffer conversationBuf = StringBuffer();
       conversationBuf.writeln('<start_of_turn>system');
-      conversationBuf.writeln(_systemPrompt);
+      conversationBuf.writeln(sysPrompt);
       conversationBuf.writeln('<end_of_turn>');
 
       for (final msg in history) {
@@ -456,7 +676,7 @@ Use simple words, avoid technical jargon. Think of explaining to a friend who gr
     await for (final chunk in streamChat(userMessage, history)) {
       buffer.write(chunk);
     }
-    return buffer.toString();
+    return cleanResponse(buffer.toString());
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -585,7 +805,10 @@ Use simple words, avoid technical jargon. Think of explaining to a friend who gr
     return 0;
   }
 
+  @override
   void dispose() {
     unloadModel();
+    _httpClient?.close();
+    super.dispose();
   }
 }

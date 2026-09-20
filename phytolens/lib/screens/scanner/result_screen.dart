@@ -22,8 +22,10 @@ import '../../widgets/subscription_gate.dart';
 import '../../widgets/health_score_ring.dart';
 import '../../widgets/loading_dots.dart';
 import '../../widgets/bouncing_button.dart';
+import '../../widgets/glass_button.dart';
 import '../ai/chatbot_screen.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import '../../data/local_database.dart';
 
 class ResultScreen extends ConsumerStatefulWidget {
   final ScanResult scan;
@@ -50,6 +52,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
   final _supabase = SupabaseService();
   final _syncService = SyncService();
   final _limiter = ScanLimiter();
+  final _localDb = LocalDatabase();
   final FlutterTts _tts = FlutterTts();
 
   late ScanResult _currentScan;
@@ -66,7 +69,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
   void initState() {
     super.initState();
     _currentScan = widget.scan;
-    _isSaved = widget.isSaved || (widget.scan.id.isNotEmpty && !widget.scan.id.startsWith('temp_'));
+    _isSaved = widget.isSaved;
 
     _initAdvice();
     _initTts();
@@ -175,11 +178,6 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
 
     try {
       final isOnline = await _syncService.isOnline();
-      String? imageUrl = _currentScan.imageUrl;
-
-      if (isOnline && widget.imageFile != null) {
-        imageUrl = await _supabase.uploadImage(widget.imageFile!, user.id);
-      }
 
       final scanToSave = ScanResult(
         id: '',
@@ -190,12 +188,25 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
         healthScore: _currentScan.healthScore,
         remedy: _aiAdvice ?? _currentScan.remedy,
         scannedAt: DateTime.now(),
-        imageUrl: imageUrl ?? widget.imageFile?.path,
+        imageUrl: widget.imageFile?.path ?? _currentScan.imageUrl,
       );
 
       ScanResult saved;
       if (isOnline) {
-        saved = await _supabase.saveScan(scanToSave);
+        try {
+          saved = await _supabase.saveScan(scanToSave);
+          // Delete temporary scan from local DB if it existed
+          if (_currentScan.id.startsWith('temp_')) {
+            await _localDb.deleteScan(_currentScan.id);
+          }
+          await _localDb.upsertScan(saved, synced: true);
+          await _limiter.incrementLocalScanCount();
+        } catch (e) {
+          debugPrint('Supabase saveScan notice, falling back to local DB: $e');
+          await _syncService.saveScanOffline(scanToSave);
+          await _limiter.incrementLocalScanCount();
+          saved = scanToSave;
+        }
       } else {
         await _syncService.saveScanOffline(scanToSave);
         await _limiter.incrementLocalScanCount();
@@ -212,10 +223,28 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
         ref.read(scanLimitProvider.notifier).recordScan();
         ref.invalidate(currentUserProvider);
       }
+
+      // Background upload image to cloud storage if online, then attach URL
+      if (isOnline && widget.imageFile != null && saved.id.isNotEmpty && !saved.id.startsWith('temp_')) {
+        _uploadAndAttachImage(widget.imageFile!, user.id, saved.id);
+      }
     } catch (e) {
+      debugPrint('Error auto-saving scan: $e');
       if (mounted) {
         setState(() => _saving = false);
       }
+    }
+  }
+
+  Future<void> _uploadAndAttachImage(File file, String userId, String scanId) async {
+    try {
+      final cloudUrl = await _supabase.uploadImage(file, userId);
+      if (cloudUrl != null && cloudUrl.isNotEmpty) {
+        await _supabase.updateScan(scanId, {'image_url': cloudUrl});
+        await _localDb.updateImageUrl(scanId, cloudUrl);
+      }
+    } catch (e) {
+      debugPrint('Background image upload notice: $e');
     }
   }
 
@@ -281,30 +310,22 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
             expandedHeight: 280,
             pinned: true,
             backgroundColor: AppColors.lightBg,
-            leading: IconButton(
-              icon: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.5),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: Colors.white),
+            leading: Center(
+              child: GlassButton.back(
+                style: GlassButtonStyle.dark,
+                onTap: () => Navigator.pop(context),
               ),
-              onPressed: () => Navigator.pop(context),
             ),
             actions: [
-              IconButton(
-                icon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.5),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.share_rounded, size: 18, color: Colors.white),
+              Center(
+                child: GlassButton(
+                  style: GlassButtonStyle.dark,
+                  icon: Icons.share_rounded,
+                  iconSize: 18,
+                  onTap: _shareDiagnosis,
                 ),
-                onPressed: _shareDiagnosis,
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 14),
             ],
             flexibleSpace: FlexibleSpaceBar(
               background: widget.imageFile != null

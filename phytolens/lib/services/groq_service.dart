@@ -12,6 +12,8 @@ import '../config/constants.dart';
 import 'gemini_service.dart';
 import 'sync_service.dart';
 import 'local_llm_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'supabase_service.dart';
 
 class GroqService {
   static const String _baseUrl = 'https://api.groq.com/openai/v1';
@@ -37,12 +39,29 @@ class GroqService {
     debugPrint('🔄 Groq API Key #$oldIdx exhausted or rate-limited ($reason). Auto-switched to key #${_currentKeyIndex + 1} of ${_apiKeys.length}.');
   }
 
-  static const String _systemPrompt = '''You are PhytoLens AI, an expert plant health advisor.
+  Future<String> _buildSystemPrompt() async {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    String contextStr = "User Tier: Free";
+    if (uid != null) {
+      try {
+        final user = await SupabaseService().getUser(uid);
+        if (user != null) {
+           final isFarm = user.isFarm;
+           final isPro = user.isPro;
+           String tier = isFarm ? "Farm" : (isPro ? "Pro" : "Free (Basic)");
+           contextStr = "User Tier: $tier\nDisplay Name: ${user.displayName}";
+        }
+      } catch (_) {}
+    }
+    return '''You are PhytoLens AI, an expert plant health advisor.
 You help farmers and gardeners understand plant diseases and treatments.
-Always respond in simple, practical language.
+CRITICAL INSTRUCTION: You MUST be extremely brief and concise. Keep responses to 1-2 sentences unless specifically asked for details. Be smart and get straight to the point.
+PRIVACY INSTRUCTION: You are communicating with the user described below. Never share details, data, or information about other users. Restrict your knowledge strictly to the current user.
+$contextStr
+
 If the user writes in Hindi, respond in Hindi.
-Give actionable, step-by-step advice. Be encouraging and supportive.
-Keep responses concise and easy to understand.''';
+Give actionable, step-by-step advice. Be encouraging.''';
+  }
 
   // ─── Execute with Automatic Key Rotation & Failover ────────────────────────
 
@@ -285,8 +304,9 @@ If you DO see a plant that was missed, respond with:
     }
 
     try {
+      final sysPrompt = await _buildSystemPrompt();
       final messages = <Map<String, String>>[
-        {'role': 'system', 'content': _systemPrompt},
+        {'role': 'system', 'content': sysPrompt},
         ...history,
         {'role': 'user', 'content': userMessage},
       ];
@@ -327,8 +347,9 @@ If you DO see a plant that was missed, respond with:
 
     bool hasYielded = false;
     try {
+      final sysPrompt = await _buildSystemPrompt();
       final messages = <Map<String, String>>[
-        {'role': 'system', 'content': _systemPrompt},
+        {'role': 'system', 'content': sysPrompt},
         ...history,
         {'role': 'user', 'content': userMessage},
       ];
@@ -405,12 +426,13 @@ If you DO see a plant that was missed, respond with:
 
   Future<String> _chat(String userMessage, {int maxTokens = 500}) async {
     try {
+      final sysPrompt = await _buildSystemPrompt();
       final response = await _postWithFallback(
         'chat/completions',
         {
           'model': AppConstants.groqModel,
           'messages': [
-            {'role': 'system', 'content': _systemPrompt},
+            {'role': 'system', 'content': sysPrompt},
             {'role': 'user', 'content': userMessage},
           ],
           'max_tokens': maxTokens,

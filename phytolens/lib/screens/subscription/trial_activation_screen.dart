@@ -11,6 +11,7 @@ import '../../providers/app_config_provider.dart';
 import '../../services/supabase_service.dart';
 import '../../config/constants.dart';
 import 'upgrade_screen.dart';
+import '../../widgets/glass_button.dart';
 
 class TrialActivationScreen extends ConsumerStatefulWidget {
   final bool fromOnboarding;
@@ -128,15 +129,16 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
         appBar: AppBar(
           backgroundColor: AppColors.surfaceDark,
           elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
-            onPressed: () {
-              if (widget.fromOnboarding) {
-                Navigator.pushNamedAndRemoveUntil(context, AppConstants.routeHome, (_) => false);
-              } else {
-                Navigator.pop(context);
-              }
-            },
+          leading: Center(
+            child: GlassButton.back(
+              onTap: () {
+                if (widget.fromOnboarding) {
+                  Navigator.pushNamedAndRemoveUntil(context, AppConstants.routeHome, (_) => false);
+                } else {
+                  Navigator.pop(context);
+                }
+              },
+            ),
           ),
           title: const Text('Trial Concluded', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
         ),
@@ -219,15 +221,16 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
         appBar: AppBar(
           backgroundColor: AppColors.surfaceDark,
           elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
-            onPressed: () {
-              if (widget.fromOnboarding) {
-                Navigator.pushNamedAndRemoveUntil(context, AppConstants.routeHome, (_) => false);
-              } else {
-                Navigator.pop(context);
-              }
-            },
+          leading: Center(
+            child: GlassButton.back(
+              onTap: () {
+                if (widget.fromOnboarding) {
+                  Navigator.pushNamedAndRemoveUntil(context, AppConstants.routeHome, (_) => false);
+                } else {
+                  Navigator.pop(context);
+                }
+              },
+            ),
           ),
           title: const Text('Pro Trial Active', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
         ),
@@ -298,15 +301,16 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
             pinned: true,
             backgroundColor: AppColors.surfaceDark,
             elevation: 0,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
-              onPressed: () {
-                if (widget.fromOnboarding) {
-                  Navigator.pushNamedAndRemoveUntil(context, AppConstants.routeHome, (_) => false);
-                } else {
-                  Navigator.pop(context);
-                }
-              },
+            leading: Center(
+              child: GlassButton.back(
+                onTap: () {
+                  if (widget.fromOnboarding) {
+                    Navigator.pushNamedAndRemoveUntil(context, AppConstants.routeHome, (_) => false);
+                  } else {
+                    Navigator.pop(context);
+                  }
+                },
+              ),
             ),
             flexibleSpace: FlexibleSpaceBar(
               background: Stack(

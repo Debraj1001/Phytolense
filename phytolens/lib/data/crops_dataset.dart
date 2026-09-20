@@ -1,0 +1,216 @@
+// lib/data/crops_dataset.dart
+
+class CropData {
+  final String name;
+  final String emoji;
+  final String imageUrl;
+  final String scientificName;
+  final String description;
+  final List<String> commonDiseases;
+
+  const CropData({
+    required this.name,
+    required this.emoji,
+    required this.imageUrl,
+    required this.scientificName,
+    required this.description,
+    required this.commonDiseases,
+  });
+}
+
+const List<CropData> cropsDataset = [
+  // 14 Original PlantVillage Crops
+  CropData(
+    name: 'Apple',
+    emoji: '🍎',
+    imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/Red_Apple.jpg/480px-Red_Apple.jpg',
+    scientificName: 'Malus domestica',
+    description: 'A sweet, edible fruit produced by an apple tree. Apples are rich in fiber and antioxidants.',
+    commonDiseases: ['Apple Scab', 'Black Rot', 'Cedar Apple Rust'],
+  ),
+  CropData(
+    name: 'Blueberry',
+    emoji: '🫐',
+    imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/Blueberries_bush.jpg/480px-Blueberries_bush.jpg',
+    scientificName: 'Cyanococcus',
+    description: 'Perennial flowering plants with indigo-colored berries. Highly nutritious and antioxidant-rich.',
+    commonDiseases: ['Mummy Berry', 'Botrytis Blight'],
+  ),
+  CropData(
+    name: 'Cherry',
+    emoji: '🍒',
+    imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/bb/Cherry_Stella444.jpg/480px-Cherry_Stella444.jpg',
+    scientificName: 'Prunus avium',
+    description: 'A fleshy drupe (stone fruit). Cherries have a short growing season and can grow in most temperate latitudes.',
+    commonDiseases: ['Powdery Mildew', 'Brown Rot'],
+  ),
+  CropData(
+    name: 'Corn (Maize)',
+    emoji: '🌽',
+    imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a7/Camponotus_flavomarginatus_ant.jpg/480px-Camponotus_flavomarginatus_ant.jpg',
+    scientificName: 'Zea mays',
+    description: 'A cereal grain first domesticated by indigenous peoples in southern Mexico about 10,000 years ago.',
+    commonDiseases: ['Cercospora Leaf Spot', 'Common Rust', 'Northern Leaf Blight'],
+  ),
+  CropData(
+    name: 'Grape',
+    emoji: '🍇',
+    imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Merlot_Gaillac_AOC.jpg/480px-Merlot_Gaillac_AOC.jpg',
+    scientificName: 'Vitis vinifera',
+    description: 'A botanically categorized berry. Grapes can be eaten fresh as table grapes or used for making wine, jam, and juice.',
+    commonDiseases: ['Black Rot', 'Esca (Black Measles)', 'Leaf Blight'],
+  ),
+  CropData(
+    name: 'Orange',
+    emoji: '🍊',
+    imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/Oranges_and_orange_juice.jpg/480px-Oranges_and_orange_juice.jpg',
+    scientificName: 'Citrus × sinensis',
+    description: 'The fruit of various citrus species. It is widely grown in tropical and subtropical climates.',
+    commonDiseases: ['Haunglongbing (Citrus Greening)', 'Citrus Canker'],
+  ),
+  CropData(
+    name: 'Peach',
+    emoji: '🍑',
+    imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/Georgia_peaches.jpg/480px-Georgia_peaches.jpg',
+    scientificName: 'Prunus persica',
+    description: 'A deciduous tree native to the region of Northwest China where it was first domesticated.',
+    commonDiseases: ['Bacterial Spot', 'Peach Leaf Curl'],
+  ),
+  CropData(
+    name: 'Pepper (Bell)',
+    emoji: '🫑',
+    imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/Capsicum_annuum_variety_fruits.jpg/480px-Capsicum_annuum_variety_fruits.jpg',
+    scientificName: 'Capsicum annuum',
+    description: 'Fruits of the Capsicum plant species. They are eaten as vegetables and come in various colors.',
+    commonDiseases: ['Bacterial Spot', 'Blossom End Rot'],
+  ),
+  CropData(
+    name: 'Potato',
+    emoji: '🥔',
+    imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Potato_and_cross_section.jpg/480px-Potato_and_cross_section.jpg',
+    scientificName: 'Solanum tuberosum',
+    description: 'A starchy root vegetable native to the Americas. A staple food in many parts of the world.',
+    commonDiseases: ['Early Blight', 'Late Blight'],
+  ),
+  CropData(
+    name: 'Raspberry',
+    emoji: '🍓',
+    imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Hapus_Mango.jpg/480px-Hapus_Mango.jpg',
+    scientificName: 'Rubus idaeus',
+    description: 'An edible fruit of a multitude of plant species in the genus Rubus, most of which are in the subgenus Idaeobatus.',
+    commonDiseases: ['Raspberry Leaf Spot', 'Root Rot'],
+  ),
+  CropData(
+    name: 'Soybean',
+    emoji: '🌱',
+    imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f8/Soybean.USDA.jpg/480px-Soybean.USDA.jpg',
+    scientificName: 'Glycine max',
+    description: 'A species of legume native to East Asia, widely grown for its edible bean, which has numerous uses.',
+    commonDiseases: ['Soybean Rust', 'Frogeye Leaf Spot'],
+  ),
+  CropData(
+    name: 'Squash',
+    emoji: '🎃',
+    imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/44/Squash_growing.jpg/480px-Squash_growing.jpg',
+    scientificName: 'Cucurbita',
+    description: 'A genus of herbaceous vines in the gourd family. It includes pumpkins and zucchinis.',
+    commonDiseases: ['Powdery Mildew', 'Downy Mildew'],
+  ),
+  CropData(
+    name: 'Strawberry',
+    emoji: '🍓',
+    imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/29/PerfectStrawberry.jpg/480px-PerfectStrawberry.jpg',
+    scientificName: 'Fragaria × ananassa',
+    description: 'A widely grown hybrid species of the genus Fragaria, cultivated worldwide for their fruit.',
+    commonDiseases: ['Leaf Scorch', 'Gray Mold'],
+  ),
+  CropData(
+    name: 'Tomato',
+    emoji: '🍅',
+    imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/Tomato_je.jpg/480px-Tomato_je.jpg',
+    scientificName: 'Solanum lycopersicum',
+    description: 'The edible berry of the plant Solanum lycopersicum, commonly known as the tomato plant.',
+    commonDiseases: ['Bacterial Spot', 'Early Blight', 'Late Blight', 'Leaf Mold', 'Septoria Leaf Spot', 'Tomato Mosaic Virus'],
+  ),
+  // 10 New Additional Crops for the Offline 24-Crop Dataset
+  CropData(
+    name: 'Banana',
+    emoji: '🍌',
+    imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/44/Bananas_white_background_DS.jpg/480px-Bananas_white_background_DS.jpg',
+    scientificName: 'Musa',
+    description: 'An elongated, edible fruit produced by several kinds of large herbaceous flowering plants.',
+    commonDiseases: ['Panama Disease', 'Black Sigatoka'],
+  ),
+  CropData(
+    name: 'Mango',
+    emoji: '🥭',
+    imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Hapus_Mango.jpg/480px-Hapus_Mango.jpg',
+    scientificName: 'Mangifera indica',
+    description: 'A juicy stone fruit produced from numerous species of tropical trees belonging to the flowering plant genus Mangifera.',
+    commonDiseases: ['Anthracnose', 'Powdery Mildew'],
+  ),
+  CropData(
+    name: 'Onion',
+    emoji: '🧅',
+    imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/25/Onion_on_White.JPG/480px-Onion_on_White.JPG',
+    scientificName: 'Allium cepa',
+    description: 'Also known as the bulb onion or common onion, it is the most widely cultivated species of the genus Allium.',
+    commonDiseases: ['Downy Mildew', 'Purple Blotch'],
+  ),
+  CropData(
+    name: 'Garlic',
+    emoji: '🧄',
+    imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/25/Garlic_Press_and_Garlic.jpg/480px-Garlic_Press_and_Garlic.jpg',
+    scientificName: 'Allium sativum',
+    description: 'A species of bulbous flowering plant in the genus Allium. Its close relatives include the onion, shallot, leek, and chive.',
+    commonDiseases: ['White Rot', 'Rust'],
+  ),
+  CropData(
+    name: 'Carrot',
+    emoji: '🥕',
+    imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/30/Carrots_-_orange.jpg/480px-Carrots_-_orange.jpg',
+    scientificName: 'Daucus carota',
+    description: 'A root vegetable, usually orange in color, though purple, black, red, white, and yellow cultivars exist.',
+    commonDiseases: ['Alternaria Leaf Blight', 'Cavity Spot'],
+  ),
+  CropData(
+    name: 'Cabbage',
+    emoji: '🥬',
+    imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Cabbage_and_cross_section_on_white.jpg/480px-Cabbage_and_cross_section_on_white.jpg',
+    scientificName: 'Brassica oleracea var. capitata',
+    description: 'A leafy green, red, or white biennial plant grown as an annual vegetable crop for its dense-leaved heads.',
+    commonDiseases: ['Clubroot', 'Black Rot'],
+  ),
+  CropData(
+    name: 'Cucumber',
+    emoji: '🥒',
+    imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Cucumber_and_slices.jpg/480px-Cucumber_and_slices.jpg',
+    scientificName: 'Cucumis sativus',
+    description: 'A widely-cultivated creeping vine plant in the Cucurbitaceae gourd family that bears usually cylindrical fruits.',
+    commonDiseases: ['Cucumber Mosaic Virus', 'Downy Mildew'],
+  ),
+  CropData(
+    name: 'Watermelon',
+    emoji: '🍉',
+    imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Watermelon_cross_section.jpg/480px-Watermelon_cross_section.jpg',
+    scientificName: 'Citrullus lanatus',
+    description: 'A flowering plant species of the Cucurbitaceae family and the name of its edible fruit. A scrambling and trailing vine-like plant.',
+    commonDiseases: ['Fusarium Wilt', 'Gummy Stem Blight'],
+  ),
+  CropData(
+    name: 'Spinach',
+    emoji: '🥬',
+    imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Spinach.jpg/480px-Spinach.jpg',
+    scientificName: 'Spinacia oleracea',
+    description: 'A leafy green flowering plant native to central and western Asia. Its leaves are a common edible vegetable.',
+    commonDiseases: ['Downy Mildew', 'White Rust'],
+  ),
+  CropData(
+    name: 'Lemon',
+    emoji: '🍋',
+    imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e4/Lemon.jpg/480px-Lemon.jpg',
+    scientificName: 'Citrus limon',
+    description: 'A species of small evergreen trees in the flowering plant family Rutaceae, native to Asia, primarily Northeast India.',
+    commonDiseases: ['Citrus Canker', 'Greasy Spot'],
+  ),
+];

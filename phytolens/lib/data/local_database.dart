@@ -83,6 +83,25 @@ class LocalDatabase {
     );
   }
 
+  /// Batch insert or update multiple scan results in a single transaction
+  Future<void> batchUpsertScans(List<ScanResult> scans, {bool synced = false}) async {
+    if (scans.isEmpty) return;
+    final db = await database;
+    final batch = db.batch();
+    for (final scan in scans) {
+      final map = scan.toMap(includeId: true);
+      map['synced'] = synced ? 1 : 0;
+      map['flagged'] = scan.flagged ? 1 : 0;
+      batch.insert(
+        'scans',
+        map,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
+
   /// Get all scans for a user, ordered by date (newest first)
   Future<List<ScanResult>> getUserScans(String userId, {int limit = 50}) async {
     final db = await database;
@@ -160,6 +179,17 @@ class LocalDatabase {
     );
   }
 
+  /// Update a scan's image URL (after cloud upload)
+  Future<void> updateImageUrl(String id, String imageUrl) async {
+    final db = await database;
+    await db.update(
+      'scans',
+      {'image_url': imageUrl},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
   /// Get aggregate stats for dashboard
   Future<Map<String, dynamic>> getUserStats(String userId) async {
     final db = await database;
@@ -211,6 +241,13 @@ class LocalDatabase {
   Future<void> deleteScan(String id) async {
     final db = await database;
     await db.delete('scans', where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Delete all scans for a user (used during account reset/deletion)
+  Future<void> clearAllUserData(String userId) async {
+    final db = await database;
+    await db.delete('scans', where: 'user_id = ?', whereArgs: [userId]);
+    debugPrint('🗑️ Cleared all scans for user: $userId');
   }
 
   /// Import scans from Supabase (bulk insert for initial sync)

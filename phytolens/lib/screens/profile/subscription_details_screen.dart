@@ -11,6 +11,7 @@ import '../../theme/design_tokens.dart';
 import '../../services/supabase_service.dart';
 import '../subscription/upgrade_screen.dart';
 import '../subscription/trial_activation_screen.dart';
+import '../../widgets/glass_button.dart';
 
 class SubscriptionDetailsScreen extends ConsumerStatefulWidget {
   final AppUser user;
@@ -139,14 +140,14 @@ class _SubscriptionDetailsScreenState extends ConsumerState<SubscriptionDetailsS
       badgeText = 'TRIAL ACTIVE';
       tierColor = AppColors.primary;
     } else if (isTrialNotStarted) {
-      planTitle = trialPrice <= 0 ? 'Free Trial Available' : 'Trial Available';
+      planTitle = '$freeTierDays-Day Trial';
       planSubtitle = trialPrice <= 0
-          ? '$freeTierDays-Day Free Trial Available • ₹0 Activation'
-          : '$freeTierDays-Day Trial Available • ₹${trialPrice.toInt()} Activation';
-      badgeText = 'TRIAL AVAILABLE';
+          ? '$freeTierDays-Day Trial • ₹0 Activation'
+          : '$freeTierDays-Day Trial • ₹${trialPrice.toInt()} Activation';
+      badgeText = 'NOT STARTED';
       tierColor = AppColors.primary;
     } else {
-      planTitle = trialPrice <= 0 ? 'Free Trial Ended' : 'Trial Ended';
+      planTitle = 'Trial Ended';
       planSubtitle = 'Trial Expired • Upgrade to Continue Scanning';
       badgeText = 'TRIAL EXPIRED';
       tierColor = AppColors.warning;
@@ -157,9 +158,8 @@ class _SubscriptionDetailsScreenState extends ConsumerState<SubscriptionDetailsS
       appBar: AppBar(
         backgroundColor: AppColors.lightSurface,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 18, color: AppColors.textPrimary),
-          onPressed: () => Navigator.pop(context),
+        leading: Center(
+          child: GlassButton.back(),
         ),
         title: const Text(
           'My Subscription Plan',

@@ -16,6 +16,7 @@ import '../../providers/app_config_provider.dart';
 import '../../services/trial_service.dart';
 import '../subscription/upgrade_screen.dart';
 import '../ai/chatbot_screen.dart';
+import '../../widgets/glass_button.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
 class ScanDetailScreen extends ConsumerStatefulWidget {
@@ -56,16 +57,11 @@ class _ScanDetailScreenState extends ConsumerState<ScanDetailScreen> {
             expandedHeight: 280,
             pinned: true,
             backgroundColor: AppColors.lightBg,
-            leading: IconButton(
-              icon: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.5),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.arrow_back_ios_new, size: 16, color: Colors.white),
+            leading: Center(
+              child: GlassButton.back(
+                style: GlassButtonStyle.dark,
+                onTap: () => Navigator.pop(context),
               ),
-              onPressed: () => Navigator.pop(context),
             ),
             flexibleSpace: FlexibleSpaceBar(
               background: Hero(

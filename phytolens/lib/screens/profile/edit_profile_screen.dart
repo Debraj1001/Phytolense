@@ -369,7 +369,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '${widget.user.subscriptionTier.toUpperCase()} MEMBER',
+                          '${widget.user.isPaidActive ? widget.user.subscriptionTier.toUpperCase() : 'TRIAL'} MEMBER',
                           style: TextStyle(
                             color: tierColor,
                             fontWeight: FontWeight.w800,

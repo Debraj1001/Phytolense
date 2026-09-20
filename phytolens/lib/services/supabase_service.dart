@@ -8,6 +8,8 @@ import '../models/scan_result.dart';
 import '../models/plant.dart';
 import '../models/app_config.dart';
 import '../config/constants.dart';
+import '../data/local_database.dart';
+import '../data/chat_database.dart';
 
 class SupabaseService {
   SupabaseClient get _client => Supabase.instance.client;
@@ -74,7 +76,19 @@ class SupabaseService {
   }
 
   Future<void> deleteUser(String uid) async {
-    await _client.from(AppConstants.tableUsers).delete().eq('uid', uid);
+    try {
+      await _client.from(AppConstants.tableUsers).delete().eq('uid', uid);
+      await _client.from(AppConstants.tableScanHistory).delete().eq('user_id', uid);
+      await _client.from(AppConstants.tableAiUsage).delete().eq('user_id', uid);
+    } catch (e) {
+      debugPrint('Cloud tables delete user error: $e');
+    }
+    try {
+      await LocalDatabase().clearAllUserData(uid);
+      await ChatDatabase().clearAllUserData(uid);
+    } catch (e) {
+      debugPrint('Local SQLite clear user error: $e');
+    }
   }
 
   Future<void> incrementScanCounters(String userId) async {
@@ -133,14 +147,14 @@ class SupabaseService {
   Future<ScanResult> saveScan(ScanResult scan) async {
     final res = await _client
         .from(AppConstants.tableScanHistory)
-        .insert(scan.toMap())
+        .insert(scan.toSupabaseMap())
         .select()
         .single();
     final saved = ScanResult.fromMap(res);
 
     // 1. Upsert into secondary 'scans' table using exact matching UUID
     try {
-      await _client.from('scans').upsert(saved.toMap(includeId: true));
+      await _client.from('scans').upsert(saved.toSupabaseMap(includeId: true));
     } catch (e) {
       debugPrint('Secondary scans sync notice: $e');
     }
