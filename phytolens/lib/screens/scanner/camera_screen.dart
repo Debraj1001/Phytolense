@@ -344,28 +344,28 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
             Text(limit.isNotStarted ? '🌱' : (limit.isExpired ? '🥀' : '⏳'), style: const TextStyle(fontSize: 40)),
             const SizedBox(height: 16),
             Text(
-              limit.isNotStarted
-                  ? '${cfg.trialDays}-Day Pro Trial Required'
-                  : (limit.isExpired ? 'Trial Concluded' : 'Daily Scan Limit Reached'),
-              style: TextStyle(
+              limit.remaining <= 0
+                  ? 'Daily Scan Limit Reached'
+                  : (limit.isNotStarted ? '${cfg.trialDays}-Day Pro Trial Available' : 'Daily Scan Limit Reached'),
+              style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
-                color: limit.isNotStarted ? AppColors.primaryDark : (limit.isExpired ? AppColors.error : AppColors.warning),
+                color: AppColors.warning,
               ),
             ),
             const SizedBox(height: 12),
             Text(
-              limit.isNotStarted
-                  ? 'Activate your ${cfg.trialDays}-Day Pro Trial for just ₹${cfg.trialPrice.toInt()} to unlock ${cfg.proScanLabel} AI leaf diagnostics, remedies, and treatment guides.'
-                  : (limit.isExpired 
-                      ? 'Your ${cfg.trialDays}-day Pro trial has ended. Upgrade to Pro (${cfg.proPrice}/month) or Farm Pack (${cfg.farmPrice}/month) to continue scanning.'
-                      : 'You\'ve reached your daily scan limit of ${limit.limit} scans. Upgrade your plan for higher daily allowances.'),
+              limit.remaining <= 0
+                  ? (limit.isNotStarted
+                      ? 'You\'ve reached your free daily limit of ${limit.limit} scans. Activate your ${cfg.trialDays}-Day Pro Trial for ₹${cfg.trialPrice.toInt()} to unlock ${cfg.proScanLabel} scans, or wait until midnight.'
+                      : 'You\'ve reached your daily scan limit of ${limit.limit} scans on the ${limit.tier} plan. Resets at midnight, or upgrade for higher allowances.')
+                  : 'Upgrade your plan for higher daily allowances.',
               style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.4),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
-            if (!limit.isExpired && !limit.isNotStarted) const _MidnightCountdownText(),
-            if (!limit.isExpired && !limit.isNotStarted) const SizedBox(height: 24),
+            const _MidnightCountdownText(),
+            const SizedBox(height: 24),
             FilledButton.icon(
               icon: Icon(limit.isNotStarted ? Icons.stars_rounded : Icons.flash_on_rounded, size: 18),
               onPressed: () {
@@ -755,18 +755,14 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
 
   // ── Helper methods for clean scan limit display ────────────────────────
   Color _getLimitColor(ScanLimitResult limit) {
-    if (limit.isNotStarted) return AppColors.primary;
-    if (limit.isExpired) return AppColors.warning;
     if (limit.isUnlimited) return AppColors.primary;
     if (limit.remaining > 0) return AppColors.lightSuccess;
     return AppColors.lightError;
   }
 
   String _getLimitText(ScanLimitResult limit) {
-    if (limit.isNotStarted) return '₹1 Trial';
-    if (limit.isExpired) return 'Trial Ended';
     if (limit.isUnlimited) return '∞ Unlimited';
-    return '${limit.remaining} left';
+    return '${limit.remaining}/${limit.limit} left';
   }
 
 

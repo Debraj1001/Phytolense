@@ -399,6 +399,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final expiry = _user?.subscriptionExpiry;
     final now = DateTime.now();
     final daysRemaining = expiry != null ? expiry.difference(now).inDays : 0;
+    final cfg = ref.watch(appConfigProvider).value ?? const AppConfig();
     
     return GestureDetector(
       onTap: () {
@@ -489,7 +490,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ? '${daysRemaining > 0 ? '$daysRemaining days remaining' : 'Expires today'} · ${DateFormat('MMM dd, yyyy').format(expiry)}'
                         : (isPaid
                             ? 'Unlimited Scans & Agronomy Active'
-                            : '50-100+ scans/day · AI chats · Analytics'),
+                            : '${cfg.proScanLabel} - ${cfg.farmScanLabel} · AI chats · Analytics'),
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.white.withValues(alpha: 0.9),

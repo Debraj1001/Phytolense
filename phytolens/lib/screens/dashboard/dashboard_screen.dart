@@ -281,16 +281,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   flex: 3,
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      if (scanLimit?.isNotStarted == true) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const TrialActivationScreen()),
-                        );
-                      } else if (scanLimit?.isExpired == true) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const UpgradeScreen()),
-                        );
+                      if (scanLimit != null && !scanLimit.canScan) {
+                        if (scanLimit.isNotStarted) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const TrialActivationScreen()),
+                          );
+                        } else {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const UpgradeScreen()),
+                          );
+                        }
                       } else {
                         ref.read(navIndexProvider.notifier).state = 1;
                       }
@@ -679,10 +681,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final String scanRemainingStr;
     if (scanLimit == null) {
       scanRemainingStr = '--';
-    } else if (scanLimit.isNotStarted) {
-      scanRemainingStr = 'Trial Needed';
-    } else if (scanLimit.isExpired) {
-      scanRemainingStr = 'Trial Ended';
     } else if (scanLimit.isUnlimited) {
       scanRemainingStr = 'Unlimited';
     } else {
@@ -692,10 +690,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final String aiRemainingStr;
     if (aiLimit == null) {
       aiRemainingStr = '--';
-    } else if (aiLimit.isNotStarted) {
-      aiRemainingStr = 'Trial Needed';
-    } else if (aiLimit.isExpired) {
-      aiRemainingStr = 'Trial Ended';
     } else if (aiLimit.isUnlimited) {
       aiRemainingStr = 'Unlimited';
     } else {

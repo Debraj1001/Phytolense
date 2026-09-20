@@ -34,18 +34,18 @@ class AppConfig {
   final bool trialEnabled;
 
   const AppConfig({
-    this.freeScanLimit = 50,
-    this.proScanLimit = 100,
-    this.farmScanLimit = -1,
-    this.freeAiLimit = 50,
-    this.proAiLimit = 100,
-    this.farmAiLimit = -1,
+    this.freeScanLimit = 15,
+    this.proScanLimit = 50,
+    this.farmScanLimit = 100,
+    this.freeAiLimit = 15,
+    this.proAiLimit = 50,
+    this.farmAiLimit = 100,
     this.proMonthlyPrice = 49,
     this.farmMonthlyPrice = 199,
     this.freeTierDays = 3,
     this.farmCreationLimitFree = 1,
     this.farmCreationLimitPro = 5,
-    this.farmCreationLimitFarm = -1,
+    this.farmCreationLimitFarm = 100,
     this.gardenEnabled = true,
     this.bulkExportEnabled = true,
     this.trialPrice = 1.0,
@@ -72,12 +72,12 @@ class AppConfig {
     }
 
     return AppConfig(
-      freeScanLimit: parseLimit(freePlan?['daily_scan_limit'] ?? m['free_daily_scan_limit'], 50),
-      proScanLimit: parseLimit(proPlan?['daily_scan_limit'] ?? m['pro_daily_scan_limit'], 100),
-      farmScanLimit: parseLimit(farmPlan?['daily_scan_limit'] ?? m['farm_daily_scan_limit'], -1),
+      freeScanLimit: parseLimit(freePlan?['daily_scan_limit'] ?? m['free_daily_scan_limit'], 15),
+      proScanLimit: parseLimit(proPlan?['daily_scan_limit'] ?? m['pro_daily_scan_limit'], 50),
+      farmScanLimit: parseLimit(farmPlan?['daily_scan_limit'] ?? m['farm_daily_scan_limit'], 100),
 
-      freeAiLimit: parseLimit(freePlan?['daily_ai_limit'] ?? m['free_daily_ai_limit'], 50),
-      proAiLimit: parseLimit(proPlan?['daily_ai_limit'] ?? m['pro_daily_ai_limit'], 100),
+      freeAiLimit: parseLimit(freePlan?['daily_ai_limit'] ?? m['free_daily_ai_limit'], 15),
+      proAiLimit: parseLimit(proPlan?['daily_ai_limit'] ?? m['pro_daily_ai_limit'], 50),
       farmAiLimit: parseLimit(farmPlan?['daily_ai_limit'] ?? m['farm_daily_ai_limit'], 100),
 
       proMonthlyPrice: parseLimit(proPlan?['monthly_price'] ?? m['pro_monthly_price'], 49),
@@ -86,7 +86,7 @@ class AppConfig {
       freeTierDays: parseLimit(m['free_tier_days'], 3),
       farmCreationLimitFree: parseLimit(freePlan?['farm_limit'] ?? m['farm_creation_limit_free'], 1),
       farmCreationLimitPro: parseLimit(proPlan?['farm_limit'] ?? m['farm_creation_limit_pro'], 5),
-      farmCreationLimitFarm: parseLimit(farmPlan?['farm_limit'] ?? m['farm_creation_limit_farm'], -1),
+      farmCreationLimitFarm: parseLimit(farmPlan?['farm_limit'] ?? m['farm_creation_limit_farm'], 100),
 
       gardenEnabled: farmPlan?['garden_enabled'] as bool? ?? m['garden_enabled'] as bool? ?? true,
       bulkExportEnabled: farmPlan?['bulk_export_enabled'] as bool? ?? m['bulk_export_enabled'] as bool? ?? true,

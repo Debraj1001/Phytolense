@@ -358,32 +358,32 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              limit.isNotStarted
-                  ? '${cfg.trialDays}-Day Pro Trial Required'
-                  : (limit.isExpired ? 'Trial Concluded' : 'Daily Limit Reached'),
-              style: TextStyle(
-                color: limit.isNotStarted ? AppColors.primaryLight : (limit.isExpired ? AppColors.error : AppColors.warning),
+              limit.remaining <= 0
+                  ? 'Daily AI Limit Reached'
+                  : (limit.isNotStarted ? '${cfg.trialDays}-Day Pro Trial Available' : 'Daily Limit Reached'),
+              style: const TextStyle(
+                color: AppColors.warning,
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
               ),
             ),
             const SizedBox(height: 6),
             Text(
-              limit.isNotStarted
-                  ? 'Activate your ${cfg.trialDays}-Day Pro Trial for just ₹${cfg.trialPrice.toInt()} to unlock ${cfg.proAiLabel} AI plant doctor chats.'
-                  : (limit.isExpired
-                      ? 'Your ${cfg.trialDays}-day Pro trial has concluded. Upgrade to Pro (${cfg.proPrice}/month) or Farm Pack (${cfg.farmPrice}/month) to continue chatting.'
+              limit.remaining <= 0
+                  ? (limit.isNotStarted
+                      ? 'You\'ve reached your free daily limit of ${limit.limit} AI chats. Activate your ${cfg.trialDays}-Day Pro Trial for ₹${cfg.trialPrice.toInt()} to unlock ${cfg.proAiLabel} chats, or wait until midnight.'
                       : (limit.tier == 'free'
-                          ? 'Your free daily chats are exhausted. Upgrade to Pro for ${cfg.proAiLabel} chats or Farm Pack for ${cfg.farmAiLabel} chats.'
+                          ? 'Your free daily chats (${limit.limit}/day) are exhausted. Upgrade to Pro for ${cfg.proAiLabel} chats or Farm Pack for ${cfg.farmAiLabel} chats.'
                           : (limit.tier == 'pro'
                               ? 'You\'ve reached your Pro daily limit of ${limit.limit} chats. Upgrade to Farm Pack for ${cfg.farmAiLabel} chats.'
-                              : 'You\'ve reached your Farm daily limit of ${limit.limit} chats. Resets at midnight.'))),
+                              : 'You\'ve reached your Farm daily limit of ${limit.limit} chats. Resets at midnight.')))
+                  : 'Upgrade your plan to continue chatting.',
               style: const TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.4),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
-            if (!limit.isExpired && !limit.isNotStarted) const _CountdownText(),
-            if (!limit.isExpired && !limit.isNotStarted) const SizedBox(height: 16),
+            const _CountdownText(),
+            const SizedBox(height: 16),
             GestureDetector(
               onTap: () => Navigator.push(
                 context,

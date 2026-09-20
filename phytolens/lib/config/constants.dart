@@ -19,9 +19,9 @@ class AppConstants {
   static const int starterDailyAiLimit = 1;
 
   // Daily Limits
-  static const int freeDailyScanLimit = 50;
-  static const int freeDailyAiLimit = 50;
-  static const int proDailyAiLimit = 100;
+  static const int freeDailyScanLimit = 15;
+  static const int freeDailyAiLimit = 15;
+  static const int proDailyAiLimit = 50;
 
   // Prices (in paise for Razorpay)
   static const int proMonthlyPaise = 4900;    // ₹49

@@ -28,31 +28,6 @@ class ScanLimiter {
 
     final trialInfo = TrialService.getTrialInfo(appUser, trialDays: config.trialDays);
 
-    if (tier == 'free' && config.trialEnabled) {
-      if (trialInfo.isNotStarted) {
-        return ScanLimitResult(
-          canScan: false,
-          remaining: 0,
-          limit: 0,
-          tier: tier,
-          reason: 'Activate your ${config.trialDays}-Day Trial to start scanning.',
-          isExpired: false,
-          isNotStarted: true,
-        );
-      }
-      if (trialInfo.isExpired) {
-        return ScanLimitResult(
-          canScan: false,
-          remaining: 0,
-          limit: 0,
-          tier: tier,
-          reason: 'Your trial has ended. Please upgrade to Tier 1 (Pro) or Farm Pack to continue scanning.',
-          isExpired: true,
-          isNotStarted: false,
-        );
-      }
-    }
-
     int limit;
     String effectiveTier = tier;
     if (tier == 'farm') {
@@ -64,6 +39,7 @@ class ScanLimiter {
       limit = config.proScanLimit;
       effectiveTier = 'pro';
     } else {
+      // Free plan follows DB config
       limit = config.freeScanLimit;
     }
 
@@ -74,21 +50,22 @@ class ScanLimiter {
         remaining: -1,
         limit: -1,
         tier: effectiveTier,
-        isExpired: false,
+        isExpired: trialInfo.isExpired,
+        isNotStarted: trialInfo.isNotStarted,
       );
     }
 
     final todayCount = appUser.todayScans;
-    final remaining = limit - todayCount;
+    final remaining = (limit - todayCount).clamp(0, limit);
 
     return ScanLimitResult(
       canScan: remaining > 0,
-      remaining: remaining < 0 ? 0 : remaining,
+      remaining: remaining,
       limit: limit,
       tier: effectiveTier,
       reason: remaining <= 0 ? 'Daily limit reached ($limit scans/day on ${trialInfo.isActive ? "Pro Trial" : effectiveTier} plan)' : null,
-      isExpired: false,
-      isNotStarted: false,
+      isExpired: trialInfo.isExpired,
+      isNotStarted: trialInfo.isNotStarted,
     );
   }
 
@@ -104,31 +81,6 @@ class ScanLimiter {
 
     final trialInfo = TrialService.getTrialInfo(appUser, trialDays: config.trialDays);
 
-    if (tier == 'free' && config.trialEnabled) {
-      if (trialInfo.isNotStarted) {
-        return AiLimitResult(
-          canUse: false,
-          remaining: 0,
-          limit: 0,
-          tier: tier,
-          reason: 'Activate your ${config.trialDays}-Day Trial to start chatting.',
-          isExpired: false,
-          isNotStarted: true,
-        );
-      }
-      if (trialInfo.isExpired) {
-        return AiLimitResult(
-          canUse: false,
-          remaining: 0,
-          limit: 0,
-          tier: tier,
-          reason: 'Your trial has ended. Please upgrade to Tier 1 (Pro) or Farm Pack to continue chatting.',
-          isExpired: true,
-          isNotStarted: false,
-        );
-      }
-    }
-
     int limit;
     String effectiveTier = tier;
     if (tier == 'farm') {
@@ -140,6 +92,7 @@ class ScanLimiter {
       limit = config.proAiLimit;
       effectiveTier = 'pro';
     } else {
+      // Free plan follows DB config
       limit = config.freeAiLimit;
     }
 
@@ -149,21 +102,22 @@ class ScanLimiter {
         remaining: -1,
         limit: -1,
         tier: effectiveTier,
-        isExpired: false,
+        isExpired: trialInfo.isExpired,
+        isNotStarted: trialInfo.isNotStarted,
       );
     }
 
     final todayAi = appUser.todayAi;
-    final remaining = limit - todayAi;
+    final remaining = (limit - todayAi).clamp(0, limit);
 
     return AiLimitResult(
       canUse: remaining > 0,
-      remaining: remaining < 0 ? 0 : remaining,
+      remaining: remaining,
       limit: limit,
       tier: effectiveTier,
       reason: remaining <= 0 ? 'Daily AI limit reached ($limit queries/day on ${trialInfo.isActive ? "Pro Trial" : effectiveTier} plan)' : null,
-      isExpired: false,
-      isNotStarted: false,
+      isExpired: trialInfo.isExpired,
+      isNotStarted: trialInfo.isNotStarted,
     );
   }
 
@@ -310,11 +264,9 @@ class ScanLimitResult {
     this.isNotStarted = false,
   });
 
-  bool get isUnlimited => (limit < 0 || remaining == -1) && !isNotStarted && !isExpired;
+  bool get isUnlimited => (limit < 0 || remaining == -1);
 
   String get displayText {
-    if (isNotStarted) return 'Trial Needed';
-    if (isExpired) return 'Trial Ended';
     if (isUnlimited) return 'Unlimited';
     return '$remaining / $limit left';
   }
@@ -339,11 +291,9 @@ class AiLimitResult {
     this.isNotStarted = false,
   });
 
-  bool get isUnlimited => (limit < 0 || remaining == -1) && !isNotStarted && !isExpired;
+  bool get isUnlimited => (limit < 0 || remaining == -1);
 
   String get displayText {
-    if (isNotStarted) return 'Trial Needed';
-    if (isExpired) return 'Trial Ended';
     if (isUnlimited) return 'Unlimited';
     return '$remaining / $limit left';
   }
