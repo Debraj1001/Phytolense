@@ -1,14 +1,21 @@
 // lib/screens/dashboard/dashboard_screen.dart
 // Minimalist, high-performance plant health dashboard
+// Consolidated single-screen status card + offline SQLite sync + micro-animations.
 
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../services/supabase_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/scan_limiter.dart';
+import '../../services/trial_service.dart';
+import '../../services/weather_service.dart';
+import '../../data/local_database.dart';
 import '../../models/app_user.dart';
 import '../../models/scan_result.dart';
 import '../../theme/colors.dart';
@@ -16,15 +23,17 @@ import '../../theme/design_tokens.dart';
 import '../../providers/scan_limit_provider.dart';
 import '../../providers/ai_limit_provider.dart';
 import '../../providers/user_provider.dart';
+import '../../providers/app_config_provider.dart';
 import '../home/home_screen.dart';
 import '../history/scan_detail_screen.dart';
 import '../ai/chatbot_screen.dart';
 import '../subscription/upgrade_screen.dart';
+import '../business/retailer_directory_screen.dart';
+import '../subscription/trial_activation_screen.dart';
+import '../profile/subscription_details_screen.dart';
 import '../../widgets/smooth_page_route.dart';
 import '../../widgets/bouncing_button.dart';
-import '../../widgets/trial_banner.dart';
-import '../../services/trial_service.dart';
-import '../../providers/app_config_provider.dart';
+import '../../widgets/emergency_doctor_pass_sheet.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -36,11 +45,15 @@ class DashboardScreen extends ConsumerStatefulWidget {
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   final _supabase = SupabaseService();
   final _auth = AuthService();
+  final _localDb = LocalDatabase();
+  final _weather = WeatherService();
 
   bool _loading = true;
   AppUser? _user;
   Map<String, dynamic> _stats = {};
   List<ScanResult> _recentScans = [];
+  SprayWindow? _sprayWindow;
+  String _outbreakMessage = 'Checking for nearby outbreaks...';
 
   StreamSubscription? _userSub;
   StreamSubscription? _scansSub;
@@ -59,12 +72,37 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   void _load() async {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) return;
-    final uid = currentUser.uid;
+    final currentUser = Supabase.instance.client.auth.currentUser;
+    final uid = currentUser?.id ?? '';
 
     _userSub?.cancel();
     _scansSub?.cancel();
+
+    // 1. Immediately load offline scans & stats from SQLite local database
+    if (uid.isNotEmpty) {
+      try {
+        final localScans = await _localDb.getRecentScans(uid, limit: 5);
+        final localStats = await _localDb.getUserStats(uid);
+        if (mounted && localScans.isNotEmpty) {
+          setState(() {
+            _recentScans = localScans;
+            _stats = {
+              'total': localStats['total_scans'] ?? 0,
+              'avgScore': localStats['avg_health'] ?? 0,
+              'diseaseCount': localStats['diseases_found'] ?? 0,
+            };
+            _loading = false;
+          });
+        }
+      } catch (e) {
+        debugPrint('Dashboard local DB error: $e');
+      }
+    }
+
+    if (currentUser == null) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
 
     try {
       final initialUser = await _auth.getUser(uid);
@@ -92,6 +130,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         final recent = scans.take(5).toList();
         final stats = await _supabase.getScanStats(uid);
 
+        // Cache to local database for offline persistence
+        for (final s in recent) {
+          await _localDb.upsertScan(s, synced: true);
+        }
+
         if (mounted) {
           setState(() {
             _recentScans = recent;
@@ -100,7 +143,45 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           });
         }
       }
+    }, onError: (e) {
+      debugPrint('Dashboard Supabase stream error (offline mode): $e');
+      if (mounted) setState(() => _loading = false);
     });
+
+    try {
+      final spray = await _weather.getSprayWindow();
+      if (mounted) {
+        setState(() => _sprayWindow = spray);
+      }
+    } catch (_) {}
+
+    try {
+      final response = await Supabase.instance.client
+          .from('outbreak_alerts')
+          .select()
+          .order('reported_at', ascending: false)
+          .limit(3);
+      if (mounted) {
+        if (response.isNotEmpty) {
+          final count = response.length;
+          final disease = response[0]['disease_name'] ?? 'unknown disease';
+          setState(() {
+            _outbreakMessage = '$count recent cases of $disease reported within 10km.';
+          });
+        } else {
+          setState(() {
+            _outbreakMessage = 'No major outbreaks reported nearby.';
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching outbreaks: $e');
+      if (mounted) {
+        setState(() {
+          _outbreakMessage = 'Outbreak radar unavailable offline.';
+        });
+      }
+    }
   }
 
   @override
@@ -108,6 +189,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final liveUser = ref.watch(currentUserProvider).value ?? _user;
     final scanLimit = ref.watch(scanLimitProvider).value;
     final aiLimit = ref.watch(aiLimitProvider).value;
+    final config = ref.watch(appConfigProvider).value;
 
     final displayName = liveUser?.displayName ?? 'Plant Lover';
     final firstName = displayName.split(' ').first;
@@ -115,6 +197,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final totalScans = _stats['total'] as int? ?? liveUser?.scanCount ?? 0;
     final avgScore = _stats['avgScore'] as int? ?? 0;
     final diseaseCount = _stats['diseaseCount'] as int? ?? 0;
+
+    final trialInfo = TrialService.getTrialInfo(
+      liveUser,
+      trialDays: config?.trialDays ?? 2,
+    );
 
     return Scaffold(
       backgroundColor: AppColors.lightBg,
@@ -124,7 +211,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         onRefresh: () async {
           ref.read(scanLimitProvider.notifier).refreshLimit();
           ref.read(aiLimitProvider.notifier).refreshLimit();
-          final uid = FirebaseAuth.instance.currentUser?.uid;
+          final uid = Supabase.instance.client.auth.currentUser?.id;
           if (uid != null) {
             final freshStats = await _supabase.getScanStats(uid);
             final freshUser = await _auth.getUser(uid);
@@ -170,70 +257,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ],
                 ),
               ],
-            ),
+            ).animate().fadeIn(duration: 350.ms).slideY(begin: -0.05, end: 0, curve: Curves.easeOutCubic),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
 
-            // ── Trial Status Banner ─────────────────────────────────────────
-            Builder(builder: (_) {
-              final config = ref.watch(appConfigProvider).value;
-              final trialInfo = TrialService.getTrialInfo(
-                liveUser,
-                trialDays: config?.trialDays ?? 2,
-              );
-              return TrialBanner(
-                trialInfo: trialInfo,
-                onUpgradeTap: () {
-                  Navigator.push(
-                    context,
-                    SmoothPageRoute(page: const UpgradeScreen()),
-                  );
-                },
-              );
-            }),
-
-            const SizedBox(height: 12),
-
-            // ── Live Tier & Daily Quota Card ────────────────────────────────
-            _buildQuotaCard(liveUser, scanLimit, aiLimit),
+            // ── 1 Consolidated Unified Status Card ──────────────────────────
+            _buildUnifiedStatusCard(
+              user: liveUser,
+              scanLimit: scanLimit,
+              aiLimit: aiLimit,
+              trialInfo: trialInfo,
+              totalScans: totalScans,
+              avgScore: avgScore,
+              diseaseCount: diseaseCount,
+            ).animate().fadeIn(duration: 400.ms, delay: 50.ms).slideY(begin: 0.04, end: 0, curve: Curves.easeOutCubic),
 
             const SizedBox(height: 18),
-
-            // ── Vitals Summary Row ──────────────────────────────────────────
-            Row(
-              children: [
-                Expanded(
-                  child: _buildVitalPill(
-                    label: 'Total Scanned',
-                    value: '$totalScans',
-                    icon: Icons.qr_code_scanner_rounded,
-                    accentColor: AppColors.primaryLight,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildVitalPill(
-                    label: 'Avg Health',
-                    value: totalScans > 0 ? '$avgScore%' : '--',
-                    icon: Icons.favorite_rounded,
-                    accentColor: avgScore >= 80
-                        ? AppColors.primaryLight
-                        : (avgScore >= 50 ? AppColors.warning : AppColors.error),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildVitalPill(
-                    label: 'Needs Care',
-                    value: '$diseaseCount',
-                    icon: Icons.healing_rounded,
-                    accentColor: diseaseCount > 0 ? AppColors.warning : AppColors.textMuted,
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 24),
 
             // ── Quick Actions ───────────────────────────────────────────────
             Row(
@@ -242,7 +281,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   flex: 3,
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      ref.read(navIndexProvider.notifier).state = 1;
+                      if (scanLimit?.isNotStarted == true) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const TrialActivationScreen()),
+                        );
+                      } else if (scanLimit?.isExpired == true) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const UpgradeScreen()),
+                        );
+                      } else {
+                        ref.read(navIndexProvider.notifier).state = 1;
+                      }
                     },
                     icon: const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.white),
                     label: const Text(
@@ -292,9 +343,221 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ),
                 ),
               ],
-            ),
+            ).animate().fadeIn(duration: 400.ms, delay: 100.ms).slideY(begin: 0.04, end: 0, curve: Curves.easeOutCubic),
 
-            const SizedBox(height: 28),
+            const SizedBox(height: 10),
+
+            // ── Secondary Actions ──────────────────────────────────────────
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const RetailerDirectoryScreen()),
+                      );
+                    },
+                    icon: const Icon(Icons.storefront_rounded, size: 16, color: AppColors.primaryDark),
+                    label: const Text(
+                      'Nearby Retailers (B2B)',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primaryDark,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: AppColors.primaryLight, width: 1.0),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      backgroundColor: const Color(0xFFF8FAFC),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ).animate().fadeIn(duration: 400.ms, delay: 120.ms).slideY(begin: 0.04, end: 0, curve: Curves.easeOutCubic),
+
+            const SizedBox(height: 24),
+
+            // ── Outbreak Radar Alert ───────────────────────────────────────
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF7ED),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFFFEDD5)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFFEDD5),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.radar_rounded, color: Color(0xFFEA580C), size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Community Radar',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF9A3412),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _outbreakMessage,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFFC2410C),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ).animate().fadeIn(duration: 400.ms, delay: 110.ms).slideY(begin: 0.04, end: 0, curve: Curves.easeOutCubic),
+
+            // ── Emergency Doctor Pass ───────────────────────────────────────
+            BouncingButton(
+              onTap: () => EmergencyDoctorPassSheet.show(context),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 24),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF4F46E5).withValues(alpha: 0.25),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.support_agent_rounded, color: Colors.white, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Emergency Doctor Pass',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Get 1-on-1 expert help now for ₹10',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 14),
+                  ],
+                ),
+              ),
+            ).animate().fadeIn(duration: 400.ms, delay: 115.ms).slideY(begin: 0.04, end: 0, curve: Curves.easeOutCubic),
+            
+            // ── Spray Window Widget ───────────────────────────────────────
+            if (_sprayWindow != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 24),
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: _sprayWindow!.isOptimal ? const Color(0xFFD1FAE5) : const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: _sprayWindow!.isOptimal ? const Color(0xFFA7F3D0) : const Color(0xFFFECACA),
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          _sprayWindow!.isOptimal ? Icons.check_circle_rounded : Icons.warning_rounded,
+                          color: _sprayWindow!.isOptimal ? AppColors.primary : AppColors.error,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Spray Window: \${_sprayWindow!.isOptimal ? "Optimal" : "Not Ideal"}',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: _sprayWindow!.isOptimal ? AppColors.primary : AppColors.error,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _sprayWindow!.message,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: _sprayWindow!.isOptimal ? const Color(0xFF065F46) : const Color(0xFF991B1B),
+                      ),
+                    ),
+                    if (!_sprayWindow!.isOptimal)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          "Next best time: \${_sprayWindow!.nextBestTime}",
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF991B1B),
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _buildWeatherStat(Icons.thermostat, '\${_sprayWindow!.current.temperature}°C', _sprayWindow!.isOptimal),
+                        _buildWeatherStat(Icons.air, '\${_sprayWindow!.current.windSpeed} km/h', _sprayWindow!.isOptimal),
+                        _buildWeatherStat(Icons.water_drop, '\${_sprayWindow!.current.precipitation} mm', _sprayWindow!.isOptimal),
+                      ],
+                    ),
+                  ],
+                ),
+              ).animate().fadeIn(duration: 400.ms, delay: 120.ms).slideY(begin: 0.04, end: 0, curve: Curves.easeOutCubic),
 
             // ── Recent Diagnoses Header ─────────────────────────────────────
             Row(
@@ -324,7 +587,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
                   ),
               ],
-            ),
+            ).animate().fadeIn(duration: 350.ms, delay: 150.ms),
 
             const SizedBox(height: 10),
 
@@ -332,33 +595,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             if (_loading && _recentScans.isEmpty)
               const Center(
                 child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 32),
-                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator(color: AppColors.primary),
                 ),
               )
             else if (_recentScans.isEmpty)
               Container(
-                padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
+                padding: const EdgeInsets.all(28),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   border: const Border.fromBorderSide(
                     BorderSide(color: Color(0xFFE2E8F0)),
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0x0A0F172A),
-                      blurRadius: 4,
-                      offset: const Offset(0, 1),
-                    ),
-                  ],
                 ),
                 child: Column(
                   children: [
-                    Icon(
-                      Icons.eco_outlined,
-                      size: 40,
-                      color: AppColors.primary.withValues(alpha: 0.4),
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD1FAE5),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(Icons.eco_outlined, color: AppColors.primary, size: 28),
                     ),
                     const SizedBox(height: 12),
                     const Text(
@@ -381,145 +641,331 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
                   ],
                 ),
-              )
+              ).animate().fadeIn(duration: 350.ms, delay: 180.ms)
             else
-              ..._recentScans.map((scan) => _buildRecentScanCard(scan)),
+              ..._recentScans.asMap().entries.map((entry) {
+                final index = entry.key;
+                final scan = entry.value;
+                return _buildRecentScanCard(scan)
+                    .animate()
+                    .fadeIn(duration: 300.ms, delay: (180 + (index * 40)).ms)
+                    .slideX(begin: 0.03, end: 0, curve: Curves.easeOutCubic);
+              }),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildQuotaCard(AppUser? user, ScanLimitResult? scanLimit, AiLimitResult? aiLimit) {
+  // ═════════════════════════════════════════════════════════════════════════
+  // CONSOLIDATED UNIFIED STATUS CARD
+  // Combines: Tier Badge + Trial Countdown + Quota Meters + Vitals in 1 Card
+  // ═════════════════════════════════════════════════════════════════════════
+
+  Widget _buildUnifiedStatusCard({
+    required AppUser? user,
+    required ScanLimitResult? scanLimit,
+    required AiLimitResult? aiLimit,
+    required TrialInfo trialInfo,
+    required int totalScans,
+    required int avgScore,
+    required int diseaseCount,
+  }) {
     final isFarm = user?.isFarm ?? false;
     final isPro = user?.isPro ?? false;
+    final isNotStarted = scanLimit?.isNotStarted == true || aiLimit?.isNotStarted == true;
+    final isExpired = scanLimit?.isExpired == true || aiLimit?.isExpired == true;
 
     final String scanRemainingStr;
     if (scanLimit == null) {
       scanRemainingStr = '--';
-    } else if (scanLimit.limit <= 0 || scanLimit.remaining <= -1) {
+    } else if (scanLimit.isNotStarted) {
+      scanRemainingStr = 'Trial Needed';
+    } else if (scanLimit.isExpired) {
+      scanRemainingStr = 'Trial Ended';
+    } else if (scanLimit.isUnlimited) {
       scanRemainingStr = 'Unlimited';
     } else {
-      scanRemainingStr = '${scanLimit.remaining} / ${scanLimit.limit} left';
+      scanRemainingStr = '${scanLimit.remaining}/${scanLimit.limit} left';
     }
 
     final String aiRemainingStr;
     if (aiLimit == null) {
       aiRemainingStr = '--';
-    } else if (aiLimit.limit <= 0 || aiLimit.remaining <= -1) {
+    } else if (aiLimit.isNotStarted) {
+      aiRemainingStr = 'Trial Needed';
+    } else if (aiLimit.isExpired) {
+      aiRemainingStr = 'Trial Ended';
+    } else if (aiLimit.isUnlimited) {
       aiRemainingStr = 'Unlimited';
     } else {
-      aiRemainingStr = '${aiLimit.remaining} / ${aiLimit.limit} left';
+      aiRemainingStr = '${aiLimit.remaining}/${aiLimit.limit} left';
+    }
+
+    final cfg = ref.watch(appConfigProvider).value ?? const AppConfig();
+
+    // Badge styling & copy
+    final String badgeLabel;
+    final Color badgeColor;
+    final Color badgeBg;
+    if (isFarm) {
+      badgeLabel = '🌾 FARM TIER';
+      badgeColor = const Color(0xFF92400E);
+      badgeBg = const Color(0xFFFEF3C7);
+    } else if (isPro) {
+      badgeLabel = '⚡ PRO TIER';
+      badgeColor = const Color(0xFF0369A1);
+      badgeBg = const Color(0xFFE0F2FE);
+    } else if (isNotStarted) {
+      badgeLabel = '🌱 ₹${cfg.trialPrice.toInt()} TRIAL AVAILABLE';
+      badgeColor = AppColors.primaryDark;
+      badgeBg = const Color(0xFFD1FAE5);
+    } else if (isExpired) {
+      badgeLabel = '🥀 TRIAL ENDED — UPGRADE';
+      badgeColor = AppColors.error;
+      badgeBg = const Color(0xFFFEE2E2);
+    } else {
+      badgeLabel = '🌱 ${cfg.trialDays}-DAY PRO TRIAL ACTIVE';
+      badgeColor = AppColors.primaryDark;
+      badgeBg = const Color(0xFFD1FAE5);
+    }
+
+    final String actionText;
+    final VoidCallback onActionTap;
+    if (isNotStarted) {
+      actionText = 'Activate ₹${cfg.trialPrice.toInt()}';
+      onActionTap = () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const TrialActivationScreen()),
+      );
+    } else if (isFarm || isPro) {
+      actionText = 'Manage';
+      onActionTap = () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => user != null
+              ? SubscriptionDetailsScreen(user: user)
+              : const UpgradeScreen(),
+        ),
+      );
+    } else {
+      actionText = 'Upgrade';
+      onActionTap = () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const UpgradeScreen()),
+      );
     }
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+        boxShadow: const [
           BoxShadow(
-            color: const Color(0x0A0F172A),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
+            color: Color(0x06000000),
+            blurRadius: 10,
+            offset: Offset(0, 3),
           ),
         ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Top Row: Status Pill & Action Link ─────────────────────────────
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
                     decoration: BoxDecoration(
-                      color: isFarm
-                          ? const Color(0xFFFFD700).withValues(alpha: 0.15)
-                          : (isPro
-                              ? const Color(0xFF00BCD4).withValues(alpha: 0.15)
-                              : AppColors.primary.withValues(alpha: 0.15)),
+                      color: badgeBg,
                       borderRadius: BorderRadius.circular(AppTokens.radiusPill),
                     ),
                     child: Text(
-                      isFarm ? '🌾 FARM TIER' : (isPro ? '⚡ PRO TIER' : '🌱 FREE PLAN'),
+                      badgeLabel,
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
-                        letterSpacing: 0.4,
-                        color: isFarm
-                            ? const Color(0xFFFFD700)
-                            : (isPro ? const Color(0xFF00BCD4) : AppColors.primaryLight),
+                        letterSpacing: 0.3,
+                        color: badgeColor,
                       ),
                     ),
                   ),
+                  if (trialInfo.isActive && !isPro && !isFarm) ...[
+                    const SizedBox(width: 8),
+                    Text(
+                      '${trialInfo.remainingDays}d left',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.lightTextSecondary,
+                      ),
+                    ),
+                  ],
                 ],
               ),
-              if (!isPro)
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const UpgradeScreen()),
-                    );
-                  },
-                  child: const Row(
+              InkWell(
+                onTap: onActionTap,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: Row(
                     children: [
                       Text(
-                        'Upgrade',
-                        style: TextStyle(
+                        actionText,
+                        style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.primaryLight,
+                          color: AppColors.primary,
                         ),
                       ),
-                      Icon(Icons.chevron_right_rounded, size: 16, color: AppColors.primaryLight),
+                      const SizedBox(width: 2),
+                      const Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 11,
+                        color: AppColors.primary,
+                      ),
                     ],
                   ),
                 ),
+              ),
             ],
           ),
+
           const SizedBox(height: 14),
+
+          // ── Middle: Quota & Limits Micro-Bar ───────────────────────────────
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFF1F5F9)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD1FAE5),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.camera_alt_outlined,
+                          size: 16,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Leaf Scans',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.lightTextMuted,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          Text(
+                            scanRemainingStr,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.lightTextPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Container(width: 1, height: 26, color: const Color(0xFFE2E8F0)),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE0F2FE),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.auto_awesome_outlined,
+                          size: 16,
+                          color: Color(0xFF0284C7),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'AI Consults',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.lightTextMuted,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          Text(
+                            aiRemainingStr,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.lightTextPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 14),
+
+          // ── Bottom: 3 Key Health Vitals ───────────────────────────────────
           Row(
             children: [
               Expanded(
-                child: Row(
-                  children: [
-                    const Icon(Icons.document_scanner_rounded, size: 18, color: AppColors.primary),
-                    const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Leaf Scans', style: TextStyle(fontSize: 11, color: AppColors.lightTextMuted)),
-                        Text(
-                          scanRemainingStr,
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.lightTextPrimary),
-                        ),
-                      ],
-                    ),
-                  ],
+                child: _buildCompactVital(
+                  icon: Icons.qr_code_scanner_rounded,
+                  iconColor: AppColors.primary,
+                  label: 'Scans',
+                  value: '$totalScans',
                 ),
               ),
-              Container(width: 1, height: 28, color: const Color(0xFFE2E8F0)),
-              const SizedBox(width: 16),
+              Container(width: 1, height: 30, color: const Color(0xFFF1F5F9)),
               Expanded(
-                child: Row(
-                  children: [
-                    const Icon(Icons.smart_toy_rounded, size: 18, color: AppColors.primary),
-                    const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('AI Queries', style: TextStyle(fontSize: 11, color: AppColors.lightTextMuted)),
-                        Text(
-                          aiRemainingStr,
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.lightTextPrimary),
-                        ),
-                      ],
-                    ),
-                  ],
+                child: _buildCompactVital(
+                  icon: Icons.favorite_rounded,
+                  iconColor: avgScore >= 80
+                      ? AppColors.primary
+                      : (avgScore >= 50 ? AppColors.warning : AppColors.error),
+                  label: 'Avg Health',
+                  value: totalScans > 0 ? '$avgScore%' : '--',
+                ),
+              ),
+              Container(width: 1, height: 30, color: const Color(0xFFF1F5F9)),
+              Expanded(
+                child: _buildCompactVital(
+                  icon: Icons.healing_rounded,
+                  iconColor: diseaseCount > 0 ? AppColors.warning : const Color(0xFF94A3B8),
+                  label: 'Needs Care',
+                  value: '$diseaseCount',
+                  isWarning: diseaseCount > 0,
                 ),
               ),
             ],
@@ -529,45 +975,40 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  Widget _buildVitalPill({
+  Widget _buildCompactVital({
+    required IconData icon,
+    required Color iconColor,
     required String label,
     required String value,
-    required IconData icon,
-    required Color accentColor,
+    bool isWarning = false,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: const Border.fromBorderSide(
-          BorderSide(color: Color(0xFFE2E8F0)),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0x080F172A),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 16, color: accentColor),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: AppColors.lightTextPrimary,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 14, color: iconColor),
+              const SizedBox(width: 4),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: isWarning ? AppColors.warning : AppColors.lightTextPrimary,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 2),
           Text(
             label,
-            style: const TextStyle(fontSize: 10, color: AppColors.lightTextMuted),
+            style: const TextStyle(
+              fontSize: 11,
+              color: AppColors.lightTextMuted,
+              fontWeight: FontWeight.w500,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -596,11 +1037,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           border: const Border.fromBorderSide(
             BorderSide(color: Color(0xFFE2E8F0)),
           ),
-          boxShadow: [
+          boxShadow: const [
             BoxShadow(
-              color: const Color(0x090F172A),
+              color: Color(0x070F172A),
               blurRadius: 4,
-              offset: const Offset(0, 1),
+              offset: Offset(0, 1),
             ),
           ],
         ),
@@ -613,19 +1054,44 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               color: statusColor.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              isHealthy ? Icons.eco_rounded : Icons.coronavirus_outlined,
-              color: statusColor,
-              size: 22,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: _buildRecentScanThumbnail(scan, statusColor),
             ),
           ),
-          title: Text(
-            scan.plantName.isNotEmpty ? scan.plantName : 'Unknown Plant',
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: AppColors.lightTextPrimary,
-            ),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  scan.plantName.isNotEmpty ? scan.plantName : 'Unknown Plant',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.lightTextPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (scan.isOffline)
+                Container(
+                  margin: const EdgeInsets.only(left: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: const Text(
+                    'Offline',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                ),
+            ],
           ),
           subtitle: Text(
             scan.diseaseName,
@@ -634,6 +1100,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               color: isHealthy ? AppColors.lightTextSecondary : AppColors.warning,
               fontWeight: isHealthy ? FontWeight.w400 : FontWeight.w600,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
@@ -659,6 +1127,65 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildRecentScanThumbnail(ScanResult scan, Color statusColor) {
+    final url = scan.imageUrl;
+    if (url == null || url.isEmpty) {
+      return Icon(
+        scan.isHealthy ? Icons.eco_rounded : Icons.coronavirus_outlined,
+        color: statusColor,
+        size: 22,
+      );
+    }
+
+    if (url.startsWith('http')) {
+      return CachedNetworkImage(
+        imageUrl: url,
+        fit: BoxFit.cover,
+        errorWidget: (_, __, ___) => Icon(
+          scan.isHealthy ? Icons.eco_rounded : Icons.coronavirus_outlined,
+          color: statusColor,
+          size: 22,
+        ),
+      );
+    }
+
+    final file = File(url);
+    if (file.existsSync()) {
+      return Image.file(
+        file,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Icon(
+          scan.isHealthy ? Icons.eco_rounded : Icons.coronavirus_outlined,
+          color: statusColor,
+          size: 22,
+        ),
+      );
+    }
+
+    return Icon(
+      scan.isHealthy ? Icons.eco_rounded : Icons.coronavirus_outlined,
+      color: statusColor,
+      size: 22,
+    );
+  }
+
+  Widget _buildWeatherStat(IconData icon, String value, bool isOptimal) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: isOptimal ? const Color(0xFF047857) : const Color(0xFFB91C1C)),
+        const SizedBox(width: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: isOptimal ? const Color(0xFF047857) : const Color(0xFFB91C1C),
+          ),
+        ),
+      ],
     );
   }
 }

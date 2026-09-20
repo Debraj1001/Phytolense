@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/scan_limiter.dart';
 import '../services/supabase_service.dart';
 
@@ -27,8 +27,9 @@ class AiLimitNotifier extends StateNotifier<AsyncValue<AiLimitResult>> {
       final config = _ref.read(appConfigProvider).value;
 
       final effectiveConfig = config ?? await SupabaseService().fetchAppConfig();
-      final effectiveUser = user ?? (FirebaseAuth.instance.currentUser?.uid != null
-          ? await SupabaseService().getUser(FirebaseAuth.instance.currentUser!.uid)
+      final currentUid = Supabase.instance.client.auth.currentUser?.id;
+      final effectiveUser = user ?? (currentUid != null
+          ? await SupabaseService().getUser(currentUid)
           : null);
 
       final result = ScanLimiter.computeAiLimit(effectiveUser, effectiveConfig);
@@ -40,7 +41,7 @@ class AiLimitNotifier extends StateNotifier<AsyncValue<AiLimitResult>> {
 
   // Update limit optimistically after an AI usage
   Future<void> recordUsage(int length) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid != null) {
       await SupabaseService().recordAiUsage(uid, 'chatbot', tokensUsed: length ~/ 4);
       await refreshLimit();

@@ -6,12 +6,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
 import '../../services/groq_service.dart';
+import '../../services/local_llm_service.dart';
+import '../../services/sync_service.dart';
+import '../../services/scan_limiter.dart';
 import '../../providers/ai_limit_provider.dart';
+import '../../providers/ai_settings_provider.dart';
 import '../../theme/colors.dart';
 import '../../theme/design_tokens.dart';
 import '../../widgets/loading_dots.dart';
 import '../subscription/upgrade_screen.dart';
 import '../subscription/trial_activation_screen.dart';
+import '../../providers/app_config_provider.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
 class ChatMessage {
@@ -37,16 +42,20 @@ class ChatbotScreen extends ConsumerStatefulWidget {
 
 class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
   final _groq = GroqService();
+  final _llmService = LocalLLMService();
+  final _syncService = SyncService();
   final _textCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   final _focusNode = FocusNode();
 
   List<ChatMessage> _messages = [];
   bool _isTyping = false;
+  bool _isOffline = false;
 
   @override
   void initState() {
     super.initState();
+    _checkConnectivity();
     _addWelcome();
     if (widget.initialMessage != null) {
       Future.delayed(const Duration(milliseconds: 500), () {
@@ -55,11 +64,19 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
     }
   }
 
+  Future<void> _checkConnectivity() async {
+    final online = await _syncService.isOnline();
+    if (mounted) setState(() => _isOffline = !online);
+  }
+
   void _addWelcome() {
+    final offlineNote = _isOffline
+        ? '\n\n📱 *You are offline — I\'m using on-device AI. Quality may vary, but I\'m here to help!*'
+        : '';
     _messages = [
       ChatMessage(
         role: 'assistant',
-        content: '🌿 Hi! I\'m PhytoLens AI powered by Groq. I can help with plant diseases, treatments, growing tips, and garden advice.\n\nWhat\'s on your mind today?',
+        content: '🌿 Hi! I\'m PhytoLens AI${_isOffline ? ' (Offline Mode)' : ''}. I can help with plant diseases, treatments, growing tips, and garden advice.$offlineNote\n\nWhat\'s on your mind today?',
         time: DateTime.now(),
       ),
     ];
@@ -67,6 +84,9 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
 
   Future<void> _sendMessage(String text) async {
     if (text.trim().isEmpty || _isTyping) return;
+
+    // Re-check connectivity
+    await _checkConnectivity();
 
     // Check AI limit
     final limit = ref.read(aiLimitProvider).value;
@@ -104,7 +124,39 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
         history.removeLast(); // Remove the empty placeholder
       }
 
-      final stream = _groq.streamChat(text, history);
+      Stream<String> stream;
+
+      final isAiEngineEnabled = ref.read(aiEngineProvider);
+      if (_isOffline || !isAiEngineEnabled) {
+        // ── OFFLINE / AI ENGINE DISABLED: Use local LLM ──
+        if (_llmService.isModelLoaded) {
+          stream = _llmService.streamChat(text, history);
+        } else if (await _llmService.isModelDownloaded()) {
+          await _llmService.loadModel();
+          stream = _llmService.streamChat(text, history);
+        } else {
+          // Model not downloaded — show prompt
+          if (mounted) {
+            setState(() {
+              final lastIdx = _messages.length - 1;
+              _messages[lastIdx] = ChatMessage(
+                role: 'assistant',
+                content: !isAiEngineEnabled
+                    ? '📱 AI Engine is disabled in settings. You need to download the offline AI model (1.5 GB, one-time) in Settings to use the chatbot locally, or re-enable the AI Engine in Profile Settings.'
+                    : '📱 The AI model needs to be downloaded first (1.5 GB, one-time).\n\nGo to **Settings → AI Model** to download, or connect to the internet to use cloud AI.',
+                time: DateTime.now(),
+              );
+              _isTyping = false;
+            });
+          }
+          return;
+        }
+        // Increment local AI count for offline tier tracking
+        await ScanLimiter().incrementLocalAiCount();
+      } else {
+        // ── ONLINE: Use Groq (existing behavior) ──
+        stream = _groq.streamChat(text, history);
+      }
 
       await for (final chunk in stream) {
         if (!mounted) break;
@@ -120,8 +172,10 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
       }
 
       // Record AI usage after full response
-      final len = _messages.last.content.length;
-      await ref.read(aiLimitProvider.notifier).recordUsage(len);
+      if (!_isOffline) {
+        final len = _messages.last.content.length;
+        await ref.read(aiLimitProvider.notifier).recordUsage(len);
+      }
 
       if (mounted) setState(() => _isTyping = false);
     } catch (e) {
@@ -130,7 +184,9 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
           final lastIdx = _messages.length - 1;
           _messages[lastIdx] = ChatMessage(
             role: 'assistant',
-            content: '⚠️ Sorry, I couldn\'t get a response. Please check your connection and try again.',
+            content: _isOffline
+                ? '⚠️ The on-device AI had a problem. Try closing other apps to free memory.'
+                : '⚠️ Sorry, I couldn\'t get a response. Please check your connection and try again.',
             time: DateTime.now(),
           );
           _isTyping = false;
@@ -179,7 +235,13 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
                       return const Text('Plant Health Expert', style: TextStyle(fontSize: 11, color: AppColors.textMuted));
                     }
                     final limit = aiState.value!;
-                    if (limit.limit <= 0) {
+                    if (limit.isNotStarted) {
+                      return const Text('Trial Required • 2-Day Trial for ₹1', style: TextStyle(fontSize: 11, color: AppColors.primaryLight));
+                    }
+                    if (limit.isExpired) {
+                      return const Text('Trial Ended • Upgrade to Chat', style: TextStyle(fontSize: 11, color: AppColors.warning));
+                    }
+                    if (limit.isUnlimited) {
                       return Text('Unlimited chats • ${limit.tier.toUpperCase()}', style: const TextStyle(fontSize: 11, color: AppColors.primaryLight));
                     }
                     return Text(
@@ -236,8 +298,10 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
       final isOffline = limit.reason != null && limit.reason!.contains('Internet');
       
       if (isOffline) {
+        // ── OFFLINE MODE: Show subtle banner but ALLOW input ──
+        // The model download prompt is shown if SLM is not downloaded.
         return Container(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
           width: double.infinity,
           decoration: BoxDecoration(
             color: AppColors.surfaceDark,
@@ -248,25 +312,38 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Offline banner
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                 decoration: BoxDecoration(
-                  color: AppColors.cardDark,
-                  shape: BoxShape.circle,
+                  color: AppColors.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.signal_wifi_connected_no_internet_4_rounded, color: AppColors.textMuted, size: 28),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Connect to the internet to chat with PhytoLens AI.',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                textAlign: TextAlign.center,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.phone_android_rounded, size: 16, color: AppColors.primary),
+                    const SizedBox(width: 6),
+                    const Text(
+                      '📱 Offline Mode — On-device AI',
+                      style: TextStyle(
+                        fontSize: 12, 
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 8),
+              // Chat input (ENABLED for offline)
+              _buildChatInput(),
             ],
           ),
         );
       }
+
+      final cfg = ref.watch(appConfigProvider).value ?? const AppConfig();
 
       return Container(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
@@ -282,10 +359,10 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
           children: [
             Text(
               limit.isNotStarted
-                  ? 'Trial Not Activated'
-                  : limit.isExpired ? 'Trial Expired' : 'Daily Limit Reached',
-              style: const TextStyle(
-                color: AppColors.warning,
+                  ? '${cfg.trialDays}-Day Pro Trial Required'
+                  : (limit.isExpired ? 'Trial Concluded' : 'Daily Limit Reached'),
+              style: TextStyle(
+                color: limit.isNotStarted ? AppColors.primaryLight : (limit.isExpired ? AppColors.error : AppColors.warning),
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
               ),
@@ -293,13 +370,13 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
             const SizedBox(height: 6),
             Text(
               limit.isNotStarted
-                  ? 'Activate your 2-Day Trial for just ₹1 to unlock unlimited AI chats.'
+                  ? 'Activate your ${cfg.trialDays}-Day Pro Trial for just ₹${cfg.trialPrice.toInt()} to unlock ${cfg.proAiLabel} AI plant doctor chats.'
                   : (limit.isExpired
-                      ? 'Your 3-day free trial has expired. Upgrade to continue chatting.'
+                      ? 'Your ${cfg.trialDays}-day Pro trial has concluded. Upgrade to Pro (${cfg.proPrice}/month) or Farm Pack (${cfg.farmPrice}/month) to continue chatting.'
                       : (limit.tier == 'free'
-                          ? 'Your free daily chats are exhausted. Upgrade to Pro for 50 chats/day or Farm Pack for 100 chats/day.'
+                          ? 'Your free daily chats are exhausted. Upgrade to Pro for ${cfg.proAiLabel} chats or Farm Pack for ${cfg.farmAiLabel} chats.'
                           : (limit.tier == 'pro'
-                              ? 'You\'ve reached your Pro daily limit of ${limit.limit} chats. Upgrade to Farm Pack for 100 chats/day.'
+                              ? 'You\'ve reached your Pro daily limit of ${limit.limit} chats. Upgrade to Farm Pack for ${cfg.farmAiLabel} chats.'
                               : 'You\'ve reached your Farm daily limit of ${limit.limit} chats. Resets at midnight.'))),
               style: const TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.4),
               textAlign: TextAlign.center,
@@ -331,10 +408,12 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.flash_on_rounded, color: Colors.white, size: 18),
+                    Icon(limit.isNotStarted ? Icons.stars_rounded : Icons.flash_on_rounded, color: Colors.white, size: 18),
                     const SizedBox(width: 8),
                     Text(
-                      limit.isNotStarted ? 'ACTIVATE 2-DAY TRIAL' : 'UNLOCK PRO NOW',
+                      limit.isNotStarted
+                          ? 'ACTIVATE ${cfg.trialDays}-DAY TRIAL (₹${cfg.trialPrice.toInt()})'
+                          : (limit.isExpired ? 'UPGRADE PLAN — FROM ${cfg.proPrice}/MO' : 'UNLOCK PRO NOW'),
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -350,6 +429,13 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
         ),
       );
     }
+
+    return _buildChatInput();
+  }
+
+  Widget _buildChatInput() {
+    final aiLimitState = ref.watch(aiLimitProvider);
+    final isLoading = aiLimitState.isLoading || aiLimitState.value == null;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),

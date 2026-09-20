@@ -4,11 +4,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../home/home_screen.dart';
 import '../../services/auth_service.dart';
 import '../../models/app_user.dart';
+import '../../providers/ai_settings_provider.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/colors.dart';
 import '../../theme/design_tokens.dart';
@@ -19,6 +20,7 @@ import 'package:intl/intl.dart';
 import '../subscription/upgrade_screen.dart';
 import 'subscription_details_screen.dart';
 import 'garden_screen.dart';
+import 'model_manager_screen.dart';
 import '../history/analytics_screen.dart';
 import 'help_support_screen.dart';
 import 'about_screen.dart';
@@ -60,9 +62,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   void _load() async {
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUser = Supabase.instance.client.auth.currentUser;
     if (currentUser == null) return;
-    final uid = currentUser.uid;
+    final uid = currentUser.id;
 
     _userSub?.cancel();
     _scansSub?.cancel();
@@ -187,7 +189,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   // Menu items
                   _buildMenuSection(),
 
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 70),
                 ],
               ]),
             ),
@@ -335,18 +337,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.08),
+                    color: AppColors.primary.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
                   ),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.edit_outlined, size: 13, color: Colors.white70),
+                      Icon(Icons.edit_outlined, size: 13, color: AppColors.primaryDark),
                       SizedBox(width: 6),
                       Text(
                         'Edit Profile Details',
-                        style: TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600),
+                        style: TextStyle(fontSize: 12, color: AppColors.primaryDark, fontWeight: FontWeight.w700),
                       ),
                     ],
                   ),
@@ -548,8 +550,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   trialLabel.replaceFirst(' · ', ''),
                   style: TextStyle(
                     fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: trialInfo.isExpired ? AppColors.error : AppColors.warning,
+                    fontWeight: FontWeight.w700,
+                    color: trialInfo.isExpired
+                        ? AppColors.error
+                        : (trialInfo.isNotStarted ? AppColors.primaryDark : AppColors.warning),
                   ),
                 ),
               ),
@@ -564,7 +568,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: isPaid ? AppColors.secondary : AppColors.primaryLight,
+                  color: isPaid ? AppColors.secondary : AppColors.primaryDark,
                 ),
               ),
             ),
@@ -588,6 +592,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
       ),
       _MenuItem(
+        icon: Icons.cloud_download_outlined,
+        label: 'Offline AI Model',
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ModelManagerScreen()),
+          );
+        },
+      ),
+      _MenuItem(
+        icon: Icons.auto_awesome,
+        label: 'AI Cloud Engine Enabled',
+        trailing: Switch(
+          value: ref.watch(aiEngineProvider),
+          onChanged: (val) {
+            ref.read(aiEngineProvider.notifier).toggle();
+          },
+          activeThumbColor: AppColors.primary,
+        ),
+        onTap: () {
+          ref.read(aiEngineProvider.notifier).toggle();
+        },
+      ),
+      _MenuItem(
         icon: Icons.insights_rounded,
         label: 'Crop Health Analytics',
         trailing: Container(
@@ -601,7 +629,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             style: TextStyle(
               fontSize: 9,
               fontWeight: FontWeight.w800,
-              color: isPaid ? AppColors.healthGood : AppColors.primaryLight,
+              color: isPaid ? AppColors.healthGood : AppColors.primaryDark,
             ),
           ),
         ),
@@ -699,11 +727,11 @@ class _StatCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(AppTokens.radiusMD),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+          border: Border.all(color: AppColors.lightBorder),
         ),
         child: Column(
           children: [
-            Icon(icon, size: 22, color: AppColors.primaryLight),
+            Icon(icon, size: 22, color: AppColors.primaryDark),
             const SizedBox(height: 6),
             Text(
               value,

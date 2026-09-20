@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/app_user.dart';
 import '../../services/supabase_service.dart';
@@ -63,7 +63,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   }
 
   Future<void> _fetchGooglePhoto() async {
-    final googlePhoto = FirebaseAuth.instance.currentUser?.photoURL;
+    final googlePhoto = Supabase.instance.client.auth.currentUser?.userMetadata?['avatar_url'] as String?;
     if (googlePhoto != null && googlePhoto.isNotEmpty) {
       HapticFeedback.selectionClick();
       setState(() => _currentAvatarUrl = googlePhoto);
@@ -133,14 +133,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         gardenType: _selectedGardenType,
       );
 
-      // Update Firebase Display Name if possible
+      // Update Supabase user metadata if possible
       try {
-        final fbUser = FirebaseAuth.instance.currentUser;
-        if (fbUser != null) {
-          await fbUser.updateDisplayName(newName);
-          if (_currentAvatarUrl.isNotEmpty) {
-            await fbUser.updatePhotoURL(_currentAvatarUrl);
-          }
+        if (_currentAvatarUrl.isNotEmpty || newName.isNotEmpty) {
+          await Supabase.instance.client.auth.updateUser(
+            UserAttributes(data: {
+              if (newName.isNotEmpty) 'full_name': newName,
+              if (_currentAvatarUrl.isNotEmpty) 'avatar_url': _currentAvatarUrl,
+            }),
+          );
         }
       } catch (_) {}
 
@@ -195,7 +196,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: Colors.white),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: AppColors.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
@@ -203,7 +204,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w700,
-            color: Colors.white,
+            color: AppColors.textPrimary,
           ),
         ),
         actions: [
@@ -299,9 +300,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                           decoration: BoxDecoration(
-                            color: AppColors.cardDark,
+                            color: Colors.white,
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                            border: Border.all(color: AppColors.lightBorder),
                           ),
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
@@ -310,7 +311,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                               SizedBox(width: 4),
                               Text(
                                 'Fetch Google Photo',
-                                style: TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600),
+                                style: TextStyle(fontSize: 12, color: AppColors.textPrimary, fontWeight: FontWeight.w600),
                               ),
                             ],
                           ),
@@ -322,18 +323,18 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                           decoration: BoxDecoration(
-                            color: AppColors.cardDark,
+                            color: Colors.white,
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                            border: Border.all(color: AppColors.lightBorder),
                           ),
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.palette_outlined, color: AppColors.primaryLight, size: 16),
+                              Icon(Icons.palette_outlined, color: AppColors.primaryDark, size: 16),
                               SizedBox(width: 6),
                               Text(
                                 'Avatar Presets',
-                                style: TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600),
+                                style: TextStyle(fontSize: 12, color: AppColors.textPrimary, fontWeight: FontWeight.w600),
                               ),
                             ],
                           ),
@@ -453,10 +454,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
-                      color: isSelected ? AppColors.primary.withValues(alpha: 0.2) : AppColors.cardDark,
+                      color: isSelected ? AppColors.primary.withValues(alpha: 0.12) : Colors.white,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: isSelected ? AppColors.primary : Colors.white.withValues(alpha: 0.08),
+                        color: isSelected ? AppColors.primary : AppColors.lightBorder,
                         width: isSelected ? 1.5 : 1,
                       ),
                     ),
@@ -464,8 +465,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       opt,
                       style: TextStyle(
                         fontSize: 13,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        color: isSelected ? AppColors.primaryLight : Colors.white70,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                        color: isSelected ? AppColors.primaryDark : AppColors.textPrimary,
                       ),
                     ),
                   ),
@@ -512,17 +513,20 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 ),
                 child: Center(
                   child: _isSaving
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 22,
                           height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.black),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: isFarm ? const Color(0xFF1A1200) : Colors.white,
+                          ),
                         )
-                      : const Text(
+                      : Text(
                           'Save Changes',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: Colors.black,
+                            color: isFarm ? const Color(0xFF1A1200) : Colors.white,
                             letterSpacing: 0.5,
                           ),
                         ),
@@ -530,7 +534,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               ),
             ),
 
-            const SizedBox(height: 40),
+            const SizedBox(height: 70),
           ],
         ),
       ),
@@ -542,11 +546,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         ? widget.user.displayName[0].toUpperCase()
         : 'P';
     return Container(
-      color: AppColors.cardDark,
+      color: Colors.white,
       child: Center(
         child: Text(
           initial,
-          style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.white),
+          style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: AppColors.primaryDark),
         ),
       ),
     );
@@ -568,9 +572,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.cardDark.withValues(alpha: 0.5),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        border: Border.all(color: AppColors.lightBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -585,8 +589,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.08),
+                  color: AppColors.lightCard,
                   borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.lightBorder),
                 ),
                 child: const Row(
                   children: [
@@ -610,9 +615,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 child: Text(
                   widget.user.email,
                   style: const TextStyle(
-                    color: Colors.white70,
+                    color: AppColors.textPrimary,
                     fontSize: 15,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -641,24 +646,24 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       controller: controller,
       keyboardType: keyboardType,
       maxLines: maxLines,
-      style: const TextStyle(color: Colors.white, fontSize: 15),
+      style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
       validator: validator,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 14),
+        hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 14),
         labelStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
-        prefixIcon: Icon(icon, color: AppColors.primaryLight, size: 20),
+        prefixIcon: Icon(icon, color: AppColors.primaryDark, size: 20),
         filled: true,
-        fillColor: AppColors.cardDark,
+        fillColor: Colors.white,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+          borderSide: const BorderSide(color: AppColors.lightBorder),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+          borderSide: const BorderSide(color: AppColors.lightBorder),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),

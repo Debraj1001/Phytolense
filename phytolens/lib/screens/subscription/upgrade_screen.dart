@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:phytolens/screens/subscription/premium_transformation_screen.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:confetti/confetti.dart';
 import '../../providers/app_config_provider.dart';
 import '../../services/supabase_service.dart';
@@ -82,10 +82,10 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
     setState(() => _processingPlan = plan);
     _payment.setPlan(plan);
 
-    final user = FirebaseAuth.instance.currentUser;
+    final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
 
-    final appUser = await SupabaseService().getUser(user.uid);
+    final appUser = await SupabaseService().getUser(user.id);
     final email = appUser?.email ?? user.email ?? '';
 
     final cfg = ref.read(appConfigProvider).value ?? const AppConfig();
@@ -93,9 +93,9 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
 
     _payment.openCheckout(
       plan: plan,
-      userId: user.uid,
-      email: email,
-      amountInPaise: amountInPaise,
+      userEmail: email,
+      userContact: appUser?.phone ?? '',
+      customAmountPaise: amountInPaise,
     );
   }
 
@@ -321,7 +321,7 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
               const SizedBox(height: 24),
 
               // What happens after trial? FAQ
-              _buildTrialFaq().animate(delay: 500.ms).fadeIn(),
+              _buildTrialFaq(cfg).animate(delay: 500.ms).fadeIn(),
 
               const SizedBox(height: 40),
             ]),
@@ -463,20 +463,24 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9999)),
                   ),
                   child: isProcessing
-                      ? const ButtonDots()
+                      ? ButtonDots(color: accentColor.computeLuminance() > 0.45 ? const Color(0xFF1A1200) : Colors.white)
                       : Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
                               'Get $title for $price',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 15,
-                                color: Colors.white,
+                                color: accentColor.computeLuminance() > 0.45 ? const Color(0xFF1A1200) : Colors.white,
                               ),
                             ),
                             const SizedBox(width: 6),
-                            const Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.white),
+                            Icon(
+                              Icons.arrow_forward_rounded,
+                              size: 16,
+                              color: accentColor.computeLuminance() > 0.45 ? const Color(0xFF1A1200) : Colors.white,
+                            ),
                           ],
                         ),
                 ),
@@ -549,17 +553,17 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
                     ),
                     Text(
                       isExpired
-                          ? 'Trial ended · Limited to ${cfg.freeScanLimit > 0 ? "1" : cfg.freeScanLabel} scan/day'
-                          : 'Trial · ${trialInfo.shortLabel}',
+                          ? 'Trial ended · Upgrade to Pro or Farm Pack to continue'
+                          : 'Pro Trial · ${trialInfo.shortLabel}',
                       style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                     ),
                   ],
                 ),
               ),
               Text(
-                'FREE',
+                isExpired ? 'EXPIRED' : 'TRIAL',
                 style: TextStyle(
-                  fontSize: 20,
+                  fontSize: 18,
                   fontWeight: FontWeight.w800,
                   color: accentColor,
                 ),
@@ -596,7 +600,9 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
           const Divider(color: Color(0x1A8FA98D), height: 1),
           const SizedBox(height: 10),
           // Current limits
-          ...['${cfg.freeScanLabel} scans', '${cfg.freeAiLabel} AI chats', 'Basic disease reports'].map(
+          ...(isExpired
+              ? ['Trial ended (0 scans/chats left)', 'Upgrade below for instant access', 'Past scan history preserved forever']
+              : ['${cfg.proScanLabel} scans (Tier 1 Pro benefits)', '${cfg.proAiLabel} AI chats (Tier 1 Pro benefits)', 'Detailed disease diagnosis reports']).map(
             (f) => Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Row(
@@ -605,13 +611,19 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
                     width: 16,
                     height: 16,
                     decoration: BoxDecoration(
-                      color: AppColors.textMuted.withValues(alpha: 0.15),
+                      color: isExpired
+                          ? AppColors.error.withValues(alpha: 0.15)
+                          : AppColors.primary.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.check, size: 10, color: AppColors.textMuted),
+                    child: Icon(
+                      isExpired ? Icons.close_rounded : Icons.check_rounded,
+                      size: 10,
+                      color: isExpired ? AppColors.error : AppColors.primary,
+                    ),
                   ),
                   const SizedBox(width: 8),
-                  Text(f, style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                  Text(f, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                 ],
               ),
             ),
@@ -621,7 +633,7 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
     ).animate().fadeIn().slideY(begin: 0.05, end: 0);
   }
 
-  Widget _buildTrialFaq() {
+  Widget _buildTrialFaq(AppConfig cfg) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -649,8 +661,8 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
           const SizedBox(height: 12),
           _faqItem(
             '📱',
-            'Can I still use the app?',
-            'Yes! After your trial, you move to a starter plan with 1 scan and 1 AI chat per day. You never lose access.',
+            'What happens when the trial ends?',
+            'When your trial concludes, scanning and AI chats require an active plan. Upgrade to Pro (${cfg.proPrice}/month) or Farm Pack (${cfg.farmPrice}/month) below. All your past scan history and saved records remain safely preserved.',
           ),
           _faqItem(
             '💰',

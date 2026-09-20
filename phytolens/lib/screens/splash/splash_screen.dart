@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../config/constants.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/colors.dart';
@@ -111,9 +111,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       if (cached != null && cached.isNotEmpty && mounted) {
         setState(() => _detectedTier = cached.toLowerCase());
       }
-      final fbUser = FirebaseAuth.instance.currentUser;
-      if (fbUser != null) {
-        final appUser = await SupabaseService().getUser(fbUser.uid);
+      final sbUser = Supabase.instance.client.auth.currentUser;
+      if (sbUser != null) {
+        final appUser = await SupabaseService().getUser(sbUser.id);
         if (appUser != null && mounted) {
           final tier = appUser.subscriptionTier.toLowerCase();
           setState(() => _detectedTier = tier);
@@ -133,9 +133,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     final onboardingDone = prefs.getBool(AppConstants.onboardingKey) ?? false;
     User? user;
     try {
-      user = FirebaseAuth.instance.currentUser;
+      user = Supabase.instance.client.auth.currentUser;
     } catch (e) {
-      debugPrint('Error getting Firebase user: $e');
+      debugPrint('Error getting Supabase user: $e');
     }
     if (!mounted) return;
 

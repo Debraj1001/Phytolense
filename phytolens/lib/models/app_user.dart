@@ -82,6 +82,13 @@ class AppUser {
     }
   }
 
+  bool get hasTrialStarted => trialActivatedAt != null;
+
+  bool isFreeTrialActive(int trialDays) {
+    if (trialActivatedAt == null) return false;
+    return !isFreeTrialExpired(trialDays);
+  }
+
   bool isFreeTrialExpired(int trialDays) {
     final tier = subscriptionTier.toLowerCase();
     if (tier == AppConstants.tierPro || tier == AppConstants.tierFarm) {
@@ -91,7 +98,8 @@ class AppUser {
         return false;
       }
     }
-    if (trialActivatedAt == null) return true; // Hasn't started = locked
+    // If the trial has never been activated, it hasn't expired yet
+    if (trialActivatedAt == null) return false;
     final expiryDate = trialActivatedAt!.add(Duration(days: trialDays));
     return DateTime.now().isAfter(expiryDate);
   }

@@ -10,6 +10,8 @@ import 'package:http/http.dart' as http;
 import '../config/env.dart';
 import '../config/constants.dart';
 import 'gemini_service.dart';
+import 'sync_service.dart';
+import 'local_llm_service.dart';
 
 class GroqService {
   static const String _baseUrl = 'https://api.groq.com/openai/v1';
@@ -156,25 +158,46 @@ Use clear headers. Be thorough but practical. This is for a professional farmer.
     required String diseaseName,
     required int healthScore,
   }) async {
-    switch (tier) {
-      case 'farm':
-        return getFullReport(
-          plantName: plantName,
-          diseaseName: diseaseName,
-          healthScore: healthScore,
-        );
-      case 'pro':
-        return getDiseaseAdvice(
-          plantName: plantName,
-          diseaseName: diseaseName,
-          healthScore: healthScore,
-        );
-      default:
-        return getBasicAdvice(
-          plantName: plantName,
-          diseaseName: diseaseName,
-          healthScore: healthScore,
-        );
+    // If offline, fallback to Local LLM
+    final isOnline = await SyncService().isOnline();
+    if (!isOnline) {
+      return await LocalLLMService().getTieredAdvice(
+        tier: tier,
+        plantName: plantName,
+        diseaseName: diseaseName,
+        healthScore: healthScore,
+      );
+    }
+
+    try {
+      switch (tier) {
+        case 'farm':
+          return await getFullReport(
+            plantName: plantName,
+            diseaseName: diseaseName,
+            healthScore: healthScore,
+          );
+        case 'pro':
+          return await getDiseaseAdvice(
+            plantName: plantName,
+            diseaseName: diseaseName,
+            healthScore: healthScore,
+          );
+        default:
+          return await getBasicAdvice(
+            plantName: plantName,
+            diseaseName: diseaseName,
+            healthScore: healthScore,
+          );
+      }
+    } catch (e) {
+      debugPrint('Groq/Gemini cloud report failed, falling back to LocalLLM: $e');
+      return await LocalLLMService().getTieredAdvice(
+        tier: tier,
+        plantName: plantName,
+        diseaseName: diseaseName,
+        healthScore: healthScore,
+      );
     }
   }
 
@@ -256,6 +279,11 @@ If you DO see a plant that was missed, respond with:
     String userMessage,
     List<Map<String, String>> history,
   ) async {
+    final isOnline = await SyncService().isOnline();
+    if (!isOnline) {
+      return await LocalLLMService().chat(userMessage, history);
+    }
+
     try {
       final messages = <Map<String, String>>[
         {'role': 'system', 'content': _systemPrompt},
@@ -289,6 +317,14 @@ If you DO see a plant that was missed, respond with:
     String userMessage,
     List<Map<String, String>> history,
   ) async* {
+    final isOnline = await SyncService().isOnline();
+    if (!isOnline) {
+      await for (final chunk in LocalLLMService().streamChat(userMessage, history)) {
+        yield chunk;
+      }
+      return;
+    }
+
     bool hasYielded = false;
     try {
       final messages = <Map<String, String>>[

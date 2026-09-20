@@ -46,6 +46,7 @@ class SubscriptionGate extends StatelessWidget {
           featureName: featureName,
           description: description,
           isNotStarted: isNotStarted,
+          config: config,
           onUpgrade: onUpgrade ?? () {
             if (isNotStarted) {
               Navigator.push(context, MaterialPageRoute(builder: (_) => const TrialActivationScreen()));
@@ -64,6 +65,7 @@ class PaywallOverlay extends StatelessWidget {
   final String? description;
   final VoidCallback? onUpgrade;
   final bool isNotStarted;
+  final AppConfig? config;
 
   const PaywallOverlay({
     super.key,
@@ -71,10 +73,12 @@ class PaywallOverlay extends StatelessWidget {
     this.description,
     this.onUpgrade,
     this.isNotStarted = false,
+    this.config,
   });
 
   @override
   Widget build(BuildContext context) {
+    final cfg = config ?? const AppConfig();
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -120,7 +124,7 @@ class PaywallOverlay extends StatelessWidget {
           Text(
             description ??
                 (isNotStarted 
-                    ? 'Activate your 2-Day Trial to access this feature.'
+                    ? 'Activate your ${cfg.trialDays}-Day Pro Trial for just ₹${cfg.trialPrice.toInt()} to access this feature.'
                     : 'Upgrade to Pro or Farm Pack to access this feature.'),
             style: const TextStyle(
               fontSize: 14,
@@ -131,10 +135,10 @@ class PaywallOverlay extends StatelessWidget {
           const SizedBox(height: 20),
           // Features list
           ...[
-            ('✅', 'Unlimited AI chats'),
-            ('✅', 'Detailed analytics'),
-            ('✅', 'Export reports'),
-            ('✅', 'Priority support'),
+            ('✅', '${cfg.proScanLabel} scans & ${cfg.proAiLabel} AI chats'),
+            ('✅', 'Detailed disease diagnosis'),
+            ('✅', 'Multi-plant garden tracking'),
+            ('✅', 'Ad-free experience & priority queue'),
           ].map(
             (item) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -164,7 +168,9 @@ class PaywallOverlay extends StatelessWidget {
               ),
             ),
             child: Text(
-              isNotStarted ? 'Activate 2-Day Trial (₹1)' : 'Upgrade to Pro — ₹49/month',
+              isNotStarted
+                  ? 'Activate ${cfg.trialDays}-Day Trial (₹${cfg.trialPrice.toInt()})'
+                  : 'Upgrade Plan — From ${cfg.proPrice}/month',
               style: const TextStyle(
                 fontWeight: FontWeight.w600,
                 fontSize: 15,

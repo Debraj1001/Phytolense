@@ -9,6 +9,8 @@ import '../../services/auth_service.dart';
 import '../../config/constants.dart';
 import '../../theme/colors.dart';
 import '../../widgets/loading_dots.dart';
+import 'email_verification_screen.dart';
+import '../subscription/trial_activation_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -56,40 +58,31 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleDeepLink(Uri uri) async {
-    if (uri.toString().contains('apiKey=')) {
-      setState(() { _loading = true; _error = null; });
-      try {
-        final email = _emailCtrl.text.trim();
-        if (email.isEmpty) {
-          setState(() {
-            _error = 'Please enter your email to complete sign in.';
-            _loading = false;
-          });
-          return;
-        }
-        await _auth.signInWithEmailLink(email, uri.toString());
-        if (mounted) {
-          Navigator.pushReplacementNamed(context, AppConstants.routeHome);
-        }
-      } catch (e) {
-        setState(() => _error = 'Failed to sign in with link. It may be expired.');
-      } finally {
-        if (mounted) setState(() => _loading = false);
+    if (uri.toString().contains('access_token=') || uri.toString().contains('type=magiclink') || uri.toString().contains('apiKey=')) {
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, AppConstants.routeHome);
       }
     }
   }
 
-  Future<void> _sendMagicLink() async {
+  Future<void> _sendOtp() async {
     if (!_formKey.currentState!.validate()) return;
+    final email = _emailCtrl.text.trim();
     setState(() { _loading = true; _error = null; _successMsg = null; });
     try {
-      await _auth.sendSignInLinkToEmail(_emailCtrl.text.trim());
-      setState(() {
-        _successMsg = 'Magic link sent! Check your email to sign in.';
-      });
+      await _auth.sendOtpToEmail(email);
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => EmailVerificationScreen(email: email),
+          ),
+        );
+      }
     } catch (e) {
+      debugPrint('Error sending OTP/magic link: $e');
       setState(() {
-        _error = 'Failed to send magic link. Please try again.';
+        _error = 'Failed to send verification code. Please try again.';
       });
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -99,13 +92,23 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _loginWithGoogle() async {
     setState(() { _googleLoading = true; _error = null; _successMsg = null; });
     try {
-      await _auth.signInWithGoogle();
+      final appUser = await _auth.signInWithGoogle();
       if (mounted) {
-        Navigator.pushReplacementNamed(context, AppConstants.routeHome);
+        if (appUser.subscriptionTier == 'free' && appUser.trialActivatedAt == null) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const TrialActivationScreen(fromOnboarding: true),
+            ),
+          );
+        } else {
+          Navigator.pushReplacementNamed(context, AppConstants.routeHome);
+        }
       }
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('🚨 Google Sign In Error: $e\n$st');
       setState(() {
-        _error = 'Google Sign In failed.';
+        _error = 'Google Sign In failed: $e';
       });
     } finally {
       if (mounted) setState(() => _googleLoading = false);
@@ -285,10 +288,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(
-                        onPressed: _loading ? null : _sendMagicLink,
+                        onPressed: _loading ? null : _sendOtp,
                         child: _loading
                             ? const ButtonDots()
-                            : const Text('Send Magic Link'),
+                            : const Text('Send OTP'),
                       ),
                     ),
                   ],

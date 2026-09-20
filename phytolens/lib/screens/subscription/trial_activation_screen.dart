@@ -5,10 +5,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../theme/colors.dart';
 import '../../widgets/bouncing_button.dart';
 import '../../services/payment_service.dart';
+import '../../services/trial_service.dart';
 import '../../providers/user_provider.dart';
+import '../../providers/app_config_provider.dart';
+import '../../config/constants.dart';
+import 'upgrade_screen.dart';
 
 class TrialActivationScreen extends ConsumerStatefulWidget {
-  const TrialActivationScreen({super.key});
+  final bool fromOnboarding;
+  const TrialActivationScreen({super.key, this.fromOnboarding = false});
 
   @override
   ConsumerState<TrialActivationScreen> createState() => _TrialActivationScreenState();
@@ -27,13 +32,17 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
           setState(() => _isLoading = false);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text('Trial Activated Successfully!'),
+              content: const Text('Tier 1 Pro Trial Activated Successfully!'),
               backgroundColor: AppColors.success,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           );
-          Navigator.pop(context); // Go back to where they came from
+          if (widget.fromOnboarding) {
+            Navigator.pushNamedAndRemoveUntil(context, AppConstants.routeHome, (_) => false);
+          } else {
+            Navigator.pop(context);
+          }
         }
       },
       onError: (error) {
@@ -58,24 +67,196 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
     super.dispose();
   }
 
-  void _startTrial() {
+  void _startTrial(AppConfig cfg) {
     final user = ref.read(currentUserProvider).value;
     if (user == null) return;
 
     setState(() => _isLoading = true);
     
-    // ₹1 (100 paise) for trial activation
+    final trialPaise = (cfg.trialPrice * 100).toInt();
     _paymentService.openCheckout(
       plan: 'trial',
-      userId: user.uid,
-      email: user.email,
-      amountInPaise: 100, // ₹1
-      phone: user.phone ?? '',
+      userEmail: user.email,
+      userContact: user.phone ?? '',
+      customAmountPaise: trialPaise > 0 ? trialPaise : 100,
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final configAsync = ref.watch(appConfigProvider);
+    final cfg = configAsync.value ?? const AppConfig();
+    final user = ref.watch(currentUserProvider).value;
+    final trialInfo = TrialService.getTrialInfo(user, trialDays: cfg.trialDays);
+
+    // If trial is already expired, direct the user to UpgradeScreen
+    if (trialInfo.isExpired) {
+      return Scaffold(
+        backgroundColor: AppColors.backgroundDark,
+        appBar: AppBar(
+          backgroundColor: AppColors.surfaceDark,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+            onPressed: () {
+              if (widget.fromOnboarding) {
+                Navigator.pushNamedAndRemoveUntil(context, AppConstants.routeHome, (_) => false);
+              } else {
+                Navigator.pop(context);
+              }
+            },
+          ),
+          title: const Text('Trial Concluded', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(28.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(22),
+                  decoration: BoxDecoration(
+                    color: AppColors.warning.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.lock_clock_rounded, size: 52, color: AppColors.warning),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'Your Pro Trial Has Concluded',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Your ${cfg.trialDays}-day Pro trial has ended. To continue scanning plant leaves and accessing botanist AI chats, please choose a plan below.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
+                ),
+                const SizedBox(height: 32),
+                BouncingButton(
+                  onTap: () {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (_) => const UpgradeScreen()),
+                    );
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [AppColors.primary, AppColors.primaryDark],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Text(
+                        'View Plans (From ${cfg.proPrice}/month)',
+                        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // If trial is already active, acknowledge it
+    if (trialInfo.isActive) {
+      return Scaffold(
+        backgroundColor: AppColors.backgroundDark,
+        appBar: AppBar(
+          backgroundColor: AppColors.surfaceDark,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+            onPressed: () {
+              if (widget.fromOnboarding) {
+                Navigator.pushNamedAndRemoveUntil(context, AppConstants.routeHome, (_) => false);
+              } else {
+                Navigator.pop(context);
+              }
+            },
+          ),
+          title: const Text('Pro Trial Active', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(28.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(22),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.check_circle_rounded, size: 52, color: AppColors.primary),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'Your Pro Trial is Active!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'You are enjoying Tier 1 (Pro) benefits with ${trialInfo.remainingDays} day${trialInfo.remainingDays == 1 ? "" : "s"} remaining (${cfg.proScanLabel} scans & ${cfg.proAiLabel} AI chats).',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
+                ),
+                const SizedBox(height: 32),
+                BouncingButton(
+                  onTap: () {
+                    Navigator.pushNamedAndRemoveUntil(context, AppConstants.routeHome, (_) => false);
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'Go to Dashboard',
+                        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.backgroundDark,
       body: CustomScrollView(
@@ -87,7 +268,13 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
             elevation: 0,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                if (widget.fromOnboarding) {
+                  Navigator.pushNamedAndRemoveUntil(context, AppConstants.routeHome, (_) => false);
+                } else {
+                  Navigator.pop(context);
+                }
+              },
             ),
             flexibleSpace: FlexibleSpaceBar(
               background: Stack(
@@ -135,8 +322,8 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      Text(
-                        'Unlock Full Access',
+                      const Text(
+                        'Unlock Pro Access',
                         style: TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.w800,
@@ -146,8 +333,8 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Start your 2-Day Trial for just ₹1',
-                        style: TextStyle(
+                        'Start your ${cfg.trialDays}-Day Pro Trial for just ₹${cfg.trialPrice.toInt()}',
+                        style: const TextStyle(
                           fontSize: 16,
                           color: AppColors.textSecondary,
                           fontWeight: FontWeight.w500,
@@ -165,53 +352,80 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'What you get',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  _buildFeatureRow(
-                    icon: Icons.qr_code_scanner_rounded,
-                    title: 'Unlimited Scanning',
-                    subtitle: 'Identify any plant instantly with no daily limits',
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Tier 1 (Pro) Benefits Included',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'PRO TIER',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primaryLight,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 20),
+                  _buildFeatureRow(
+                    icon: Icons.qr_code_scanner_rounded,
+                    title: '${cfg.proScanLabel} Plant Scans',
+                    subtitle: 'Scan up to ${cfg.proScanLimit} plant leaves daily with AI precision',
+                  ),
+                  const SizedBox(height: 18),
+                  _buildFeatureRow(
+                    icon: Icons.smart_toy_rounded,
+                    title: '${cfg.proAiLabel} Botanist AI Diagnostics',
+                    subtitle: 'Ask our botanist AI up to ${cfg.proAiLimit} questions every day',
+                  ),
+                  const SizedBox(height: 18),
                   _buildFeatureRow(
                     icon: Icons.monitor_heart_rounded,
                     title: 'Detailed Disease Diagnosis',
-                    subtitle: 'Get comprehensive health reports and treatment plans',
+                    subtitle: 'Comprehensive health reports, causes & treatment plans',
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 18),
                   _buildFeatureRow(
-                    icon: Icons.smart_toy_rounded,
-                    title: 'Expert AI Chat',
-                    subtitle: 'Ask our botanist AI anything about your plants',
+                    icon: Icons.yard_rounded,
+                    title: 'Multi-Plant Garden Tracking',
+                    subtitle: 'Organize and monitor up to ${cfg.farmCreationLimitPro} plant gardens',
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 18),
                   _buildFeatureRow(
                     icon: Icons.verified_rounded,
                     title: 'Ad-Free Experience',
-                    subtitle: 'Focus on your plants with zero distractions',
+                    subtitle: 'Zero distractions with priority cloud analysis queue',
                   ),
                   
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 36),
 
                   // Price Tag
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceDark,
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.cardDarker),
+                      border: Border.all(color: AppColors.lightBorder),
                     ),
                     child: Column(
                       children: [
-                        Text(
+                        const Text(
                           'Trial Activation Fee',
                           style: TextStyle(
                             fontSize: 14,
@@ -224,7 +438,7 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
+                            const Text(
                               '₹',
                               style: TextStyle(
                                 fontSize: 24,
@@ -233,8 +447,8 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
                               ),
                             ),
                             Text(
-                              '1',
-                              style: TextStyle(
+                              '${cfg.trialPrice.toInt()}',
+                              style: const TextStyle(
                                 fontSize: 44,
                                 fontWeight: FontWeight.w800,
                                 color: AppColors.textPrimary,
@@ -245,8 +459,8 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Valid for 2 days. No auto-renewal.',
-                          style: TextStyle(
+                          'Valid for ${cfg.trialDays} days. No auto-renewal.',
+                          style: const TextStyle(
                             fontSize: 13,
                             color: AppColors.textMuted,
                           ),
@@ -258,7 +472,7 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
                   const SizedBox(height: 28),
 
                   BouncingButton(
-                    onTap: _isLoading ? null : _startTrial,
+                    onTap: _isLoading ? null : () => _startTrial(cfg),
                     child: Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 18),
@@ -287,9 +501,9 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
                                   valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                                 ),
                               )
-                            : const Text(
-                                'Activate Trial Now',
-                                style: TextStyle(
+                            : Text(
+                                'Activate ${cfg.trialDays}-Day Pro Trial (₹${cfg.trialPrice.toInt()})',
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 16,
                                   fontWeight: FontWeight.w700,
@@ -301,13 +515,34 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
 
                   const SizedBox(height: 20),
                   
+                  if (widget.fromOnboarding) ...[
+                    Center(
+                      child: TextButton(
+                        onPressed: () => Navigator.pushNamedAndRemoveUntil(
+                          context,
+                          AppConstants.routeHome,
+                          (_) => false,
+                        ),
+                        child: const Text(
+                          'Explore PhytoLens first',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+
                   const Center(
                     child: Text(
                       'Powered by Razorpay · Secure Checkout',
                       style: TextStyle(fontSize: 12, color: AppColors.textMuted),
                     ),
                   ),
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 60),
                 ],
               ),
             ),
@@ -328,9 +563,9 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: AppColors.surfaceDark,
+            color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.cardDarker),
+            border: Border.all(color: AppColors.lightBorder),
           ),
           child: Icon(icon, color: AppColors.primary, size: 24),
         ),
@@ -341,7 +576,7 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
             children: [
               Text(
                 title,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: AppColors.textPrimary,
@@ -350,7 +585,7 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
               const SizedBox(height: 4),
               Text(
                 subtitle,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 14,
                   color: AppColors.textSecondary,
                   height: 1.4,

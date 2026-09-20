@@ -1,17 +1,14 @@
-// lib/providers/user_provider.dart
-// Streams the currently logged in AppUser in real time from Supabase.
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/app_user.dart';
 import '../services/supabase_service.dart';
 
 final authStateProvider = StreamProvider<User?>((ref) {
-  return FirebaseAuth.instance.authStateChanges();
+  return Supabase.instance.client.auth.onAuthStateChange.map((event) => event.session?.user);
 });
 
 final currentUserProvider = StreamProvider<AppUser?>((ref) {
   final authUser = ref.watch(authStateProvider).value;
   if (authUser == null) return Stream.value(null);
-  return SupabaseService().streamUser(authUser.uid);
+  return SupabaseService().streamUser(authUser.id);
 });

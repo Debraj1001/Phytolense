@@ -3,7 +3,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/supabase_service.dart';
 import '../../models/plant.dart';
 import '../../theme/colors.dart';
@@ -40,7 +40,7 @@ class _GardenScreenState extends State<GardenScreen> {
   }
 
   void _load() {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final uid = Supabase.instance.client.auth.currentUser!.id;
     _sub?.cancel();
     _sub = _supabase.streamGarden(uid).listen((plants) {
       if (mounted) {
@@ -154,7 +154,7 @@ class _GardenScreenState extends State<GardenScreen> {
   }
 
   Future<void> _addPlant() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid == null) return;
     final user = await _supabase.getUser(uid);
     final tier = (user?.subscriptionTier ?? 'free').toLowerCase();
@@ -170,7 +170,7 @@ class _GardenScreenState extends State<GardenScreen> {
       final isExpired = user != null && user.isFreeTrialExpired(config['trial_days'] ?? config['free_tier_days'] ?? 2);
       final hasNotStarted = user?.trialActivatedAt == null;
 
-      if (isExpired) {
+      if (hasNotStarted || isExpired) {
         if (!mounted) return;
         showDialog(
           context: context,
@@ -179,12 +179,12 @@ class _GardenScreenState extends State<GardenScreen> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             title: Text(
               hasNotStarted ? 'Trial Required' : 'Trial Expired',
-              style: const TextStyle(color: AppColors.warning, fontWeight: FontWeight.w700),
+              style: TextStyle(color: hasNotStarted ? AppColors.primaryDark : AppColors.warning, fontWeight: FontWeight.w700),
             ),
             content: Text(
               hasNotStarted
-                  ? 'Activate your 2-day trial for just ₹1 to track plants in your garden.'
-                  : 'Your trial has expired. Upgrade to Pro or Farm Pack for unlimited garden tracking.',
+                  ? 'Activate your introductory Pro trial for just ₹${config['trial_price']?.toInt() ?? 1} to track plants in your garden.'
+                  : 'Your trial has expired. Upgrade to Pro or Farm Pack to continue tracking your gardens.',
               style: const TextStyle(color: AppColors.textSecondary),
             ),
             actions: [
@@ -208,12 +208,15 @@ class _GardenScreenState extends State<GardenScreen> {
                   }
                 },
                 style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
-                child: Text(hasNotStarted ? 'Activate Trial (₹1)' : 'View Plans'),
+                child: Text(hasNotStarted ? 'Activate Trial' : 'View Plans'),
               ),
             ],
           ),
         );
         return;
+      } else {
+        // During active trial, user receives Tier 1 (Pro) limits
+        maxPlants = config['farm_creation_limit_pro'] ?? 5;
       }
     }
 
@@ -384,7 +387,7 @@ class _AddPlantSheetState extends State<_AddPlantSheet> {
   Future<void> _save() async {
     if (_ctrl.text.trim().isEmpty) return;
     setState(() => _saving = true);
-    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final uid = Supabase.instance.client.auth.currentUser!.id;
     await _supabase.addPlant(uid, _ctrl.text.trim(), _type);
     if (mounted) {
       Navigator.pop(context);

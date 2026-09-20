@@ -4,9 +4,10 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import '../../services/supabase_service.dart';
+import '../../data/local_database.dart';
 import '../../models/scan_result.dart';
 import '../../theme/colors.dart';
 import '../../theme/design_tokens.dart';
@@ -26,6 +27,7 @@ class ScanHistoryScreen extends StatefulWidget {
 
 class _ScanHistoryScreenState extends State<ScanHistoryScreen> {
   final _supabase = SupabaseService();
+  final _localDb = LocalDatabase();
   bool _loading = true;
   List<ScanResult> _scans = [];
   List<ScanResult> _filtered = [];
@@ -45,18 +47,43 @@ class _ScanHistoryScreenState extends State<ScanHistoryScreen> {
     super.dispose();
   }
 
-  void _load() {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
+  void _load() async {
+    final uid = Supabase.instance.client.auth.currentUser?.id ?? '';
     _sub?.cancel();
-    _sub = _supabase.streamUserScans(uid).listen((scans) {
+
+    // 1. Immediately load offline scans from SQLite local database
+    try {
+      final localScans = await _localDb.getUserScans(uid);
+      if (mounted && localScans.isNotEmpty) {
+        setState(() {
+          _scans = localScans;
+          _applyFilter();
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Local DB history load error: $e');
+    }
+
+    if (uid.isEmpty) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+
+    // 2. Stream from Supabase if online, and cache new scans
+    _sub = _supabase.streamUserScans(uid).listen((scans) async {
       if (mounted) {
+        for (final s in scans) {
+          await _localDb.upsertScan(s, synced: true);
+        }
         setState(() {
           _scans = scans;
           _applyFilter();
           _loading = false;
         });
       }
-    }, onError: (_) {
+    }, onError: (e) {
+      debugPrint('Supabase stream error (offline): $e');
       if (mounted) setState(() => _loading = false);
     });
   }
@@ -74,7 +101,7 @@ class _ScanHistoryScreenState extends State<ScanHistoryScreen> {
   }
 
   Future<void> _exportReport() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid == null) return;
     final user = await _supabase.getUser(uid);
     final isPaid = user?.isPro == true || user?.isFarm == true;
@@ -291,7 +318,8 @@ class _ScanHistoryScreenState extends State<ScanHistoryScreen> {
     });
     
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
+      final uid = Supabase.instance.client.auth.currentUser?.id;
+      await _localDb.deleteScan(scan.id);
       await _supabase.deleteScan(scan.id, userId: uid ?? scan.userId);
     } catch (e) {
       if (mounted) {

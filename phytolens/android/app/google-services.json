@@ -1,41 +1,41 @@
 {
   "project_info": {
-    "project_number": "646033659202",
-    "project_id": "phytolens-f7c63",
-    "storage_bucket": "phytolens-f7c63.firebasestorage.app"
+    "project_number": "829141947094",
+    "project_id": "phytolense-final",
+    "storage_bucket": "phytolense-final.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:646033659202:android:2e43dbc54e68a84ddb64db",
+        "mobilesdk_app_id": "1:829141947094:android:85c627364d5cd7a588ef77",
         "android_client_info": {
           "package_name": "com.phytolens.phytolens"
         }
       },
       "oauth_client": [
         {
-          "client_id": "646033659202-ptoem3fcp8lcclv77k19lsurnhjt3qd7.apps.googleusercontent.com",
+          "client_id": "829141947094-166809rf76tuq6kaetaqgkn1869h086i.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.phytolens.phytolens",
-            "certificate_hash": "db1fa81de01e718d7d4ab746dfe88faad2cb5391"
+            "certificate_hash": "cf07ebe8c8e11ca93934b473bc06d5ab85214e27"
           }
         },
         {
-          "client_id": "646033659202-3rimcckpeaca490ubm14ho21fgfif121.apps.googleusercontent.com",
+          "client_id": "829141947094-ul2srm1goo7vt6hkb3b71bipqut8m9fp.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyDQqtEyvSQE3sAPqz6MPTtIbOAxAKcgTak"
+          "current_key": "AIzaSyAwxQn1X3HrC3mwwsDgvHIsnKfbELSoiIw"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "646033659202-3rimcckpeaca490ubm14ho21fgfif121.apps.googleusercontent.com",
+              "client_id": "829141947094-1hcbcd89vt9ub14trplmjbbmum3m7vfo.apps.googleusercontent.com",
               "client_type": 3
             }
           ]

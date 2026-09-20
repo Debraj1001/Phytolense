@@ -2,7 +2,7 @@
 // Real-time provider for daily plant leaf scan limits and counts.
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/scan_limiter.dart';
 import '../services/supabase_service.dart';
 import 'user_provider.dart';
@@ -28,8 +28,9 @@ class ScanLimitNotifier extends StateNotifier<AsyncValue<ScanLimitResult>> {
       final config = _ref.read(appConfigProvider).value;
 
       final effectiveConfig = config ?? await SupabaseService().fetchAppConfig();
-      final effectiveUser = user ?? (FirebaseAuth.instance.currentUser?.uid != null
-          ? await SupabaseService().getUser(FirebaseAuth.instance.currentUser!.uid)
+      final currentUid = Supabase.instance.client.auth.currentUser?.id;
+      final effectiveUser = user ?? (currentUid != null
+          ? await SupabaseService().getUser(currentUid)
           : null);
 
       final result = ScanLimiter.computeScanLimit(effectiveUser, effectiveConfig);

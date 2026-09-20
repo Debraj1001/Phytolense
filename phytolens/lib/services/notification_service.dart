@@ -2,7 +2,6 @@
 
 import 'dart:developer';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_service.dart';
 
@@ -83,13 +82,13 @@ class NotificationService {
 
   /// Update user's FCM token in Supabase
   Future<void> _saveTokenToSupabase(String token) async {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = Supabase.instance.client.auth.currentUser;
     if (user != null) {
       try {
-        await _supabase.updateUser(user.uid, {
+        await _supabase.updateUser(user.id, {
           'fcm_token': token,
         });
-        log('FCM token saved to Supabase for user: ${user.uid}');
+        log('FCM token saved to Supabase for user: ${user.id}');
       } catch (e) {
         log('Failed to save FCM token to Supabase: $e');
       }

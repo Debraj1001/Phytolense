@@ -6,16 +6,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/colors.dart';
-import '../../theme/design_tokens.dart';
 import '../../providers/user_provider.dart';
-import '../../widgets/user_avatar.dart';
+import '../../widgets/offline_banner.dart';
+import '../../providers/connectivity_provider.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../scanner/camera_screen.dart';
 import '../history/scan_history_screen.dart';
-import '../ai/chatbot_screen.dart';
 import '../profile/profile_screen.dart';
-import '../profile/subscription_details_screen.dart';
-import '../subscription/upgrade_screen.dart';
+import '../../widgets/bouncing_button.dart';
 
 final navIndexProvider = StateProvider<int>((ref) => 0);
 
@@ -32,6 +30,7 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final idx = ref.watch(navIndexProvider);
     final user = ref.watch(currentUserProvider).value;
+    final isOnline = ref.watch(connectivityProvider).value ?? true;
 
     return Scaffold(
       backgroundColor: AppColors.lightBg,
@@ -39,147 +38,79 @@ class HomeScreen extends ConsumerWidget {
         preferredSize: const Size.fromHeight(60),
         child: SafeArea(
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: const BoxDecoration(
-              color: AppColors.lightBg,
-              border: Border(
-                bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1),
-              ),
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            color: Colors.white,
             child: Row(
               children: [
-                // ── Brand ─────────────────────────────────────────────────
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(7),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFD1FAE5),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.eco_rounded,
-                        color: AppColors.primary,
-                        size: 18,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      'PhytoLens',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.lightTextPrimary,
-                        letterSpacing: -0.4,
-                      ),
-                    ),
-                  ],
+                // ── Brand Mark (Clean) ──────────────────────────────────
+                const Icon(
+                  Icons.eco_rounded,
+                  color: AppColors.primary,
+                  size: 28,
                 ),
+                const SizedBox(width: 8),
+                Text(
+                  'PhytoLens',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+
                 const Spacer(),
 
-                // ── Tier Pill ─────────────────────────────────────────────
-                if (user != null)
-                  GestureDetector(
-                    onTap: () {
-                      if (user.isPro) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => SubscriptionDetailsScreen(user: user),
-                          ),
-                        );
-                      } else {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const UpgradeScreen(),
-                          ),
-                        );
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      margin: const EdgeInsets.only(right: 8),
-                      decoration: BoxDecoration(
-                        color: user.isFarm
-                            ? const Color(0xFFFEF9C3)
-                            : (user.isPro
-                                ? const Color(0xFFE0F2FE)
-                                : const Color(0xFFD1FAE5)),
-                        borderRadius: BorderRadius.circular(AppTokens.radiusPill),
-                        border: Border.all(
-                          color: user.isFarm
-                              ? const Color(0xFFFDE68A)
-                              : (user.isPro
-                                  ? const Color(0xFFBAE6FD)
-                                  : const Color(0xFF6EE7B7)),
-                          width: 1,
-                        ),
-                      ),
-                      child: Text(
-                        user.isFarm ? '🌾 FARM' : (user.isPro ? '⚡ PRO' : '🌱 FREE'),
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.5,
-                          color: user.isFarm
-                              ? const Color(0xFF92400E)
-                              : (user.isPro
-                                  ? const Color(0xFF0369A1)
-                                  : AppColors.primaryDark),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                // ── AI Action Button ───────────────────────────────────────
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const ChatbotScreen()),
-                    );
-                  },
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    margin: const EdgeInsets.only(right: 8),
+                // ── Offline Indicator (subtle) ──────────────────────────
+                if (!isOnline)
+                  Container(
+                    margin: const EdgeInsets.only(right: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      border: const Border.fromBorderSide(
-                        BorderSide(color: Color(0xFFE2E8F0), width: 1),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0x080F172A),
-                          blurRadius: 4,
-                          offset: const Offset(0, 1),
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.cloud_off_rounded, size: 14, color: Color(0xFF64748B)),
+                        SizedBox(width: 4),
+                        Text(
+                          'Offline',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF64748B),
+                          ),
                         ),
                       ],
                     ),
-                    child: const Icon(
-                      Icons.auto_awesome_rounded,
-                      color: AppColors.primary,
-                      size: 17,
-                    ),
                   ),
-                ),
 
-                // ── Profile Avatar ─────────────────────────────────────────
-                GestureDetector(
+                // ── Profile Avatar (Minimalist) ────────────────────────
+                BouncingButton(
                   onTap: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (_) => const ProfileScreen()),
                     );
                   },
-                  child: UserAvatar(
-                    avatarUrl: user?.avatarUrl,
-                    displayName: user?.displayName ?? 'User',
-                    tier: user?.subscriptionTier,
-                    size: 17,
-                    showBorder: true,
+                  child: CircleAvatar(
+                    radius: 18,
+                    backgroundColor: const Color(0xFFF1F5F9),
+                    backgroundImage: user?.avatarUrl != null 
+                        ? NetworkImage(user!.avatarUrl!) 
+                        : null,
+                    child: user?.avatarUrl == null
+                        ? Text(
+                            (user?.displayName ?? 'U').substring(0, 1).toUpperCase(),
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          )
+                        : null,
                   ),
                 ),
               ],
@@ -188,29 +119,36 @@ class HomeScreen extends ConsumerWidget {
         ),
       ),
 
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 260),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        transitionBuilder: (child, animation) {
-          return FadeTransition(
-            opacity: CurvedAnimation(
-              parent: animation,
-              curve: const Interval(0.2, 1.0, curve: Curves.easeOut),
+      body: Column(
+        children: [
+          const OfflineBanner(),
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 260),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) {
+                return FadeTransition(
+                  opacity: CurvedAnimation(
+                    parent: animation,
+                    curve: const Interval(0.2, 1.0, curve: Curves.easeOut),
+                  ),
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 0.015),
+                      end: Offset.zero,
+                    ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+                    child: child,
+                  ),
+                );
+              },
+              child: KeyedSubtree(
+                key: ValueKey<int>(idx),
+                child: _screens[idx.clamp(0, _screens.length - 1)],
+              ),
             ),
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 0.015),
-                end: Offset.zero,
-              ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
-              child: child,
-            ),
-          );
-        },
-        child: KeyedSubtree(
-          key: ValueKey<int>(idx),
-          child: _screens[idx.clamp(0, _screens.length - 1)],
-        ),
+          ),
+        ],
       ),
 
       extendBody: true,

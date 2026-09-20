@@ -29,6 +29,11 @@ dependencies:
   tflite_flutter: ^0.12.1
   image: ^4.3.0
   groq: ^1.1.1
+  fllama: ^0.0.1
+  
+  # Security
+  flutter_secure_storage: ^9.2.2
+  crypto: ^3.0.3
 
   # Camera & Media
   camera: ^0.11.0+2
@@ -68,6 +73,17 @@ dependencies:
   app_links: ^7.0.0
   flutter_dynamic_icon_plus: ^1.4.1
   flutter_markdown: ^0.7.7+1
+  # serious_python: ^4.7.0
+  onnxruntime: ^1.4.1
+  dio: ^5.11.1
+
+  # Voice (Text-to-Speech for offline remedy read-aloud)
+  flutter_tts: ^4.2.0
+
+  # Local Database (offline scan history)
+  sqflite: ^2.4.2
+  path: ^1.9.1
+  geolocator: ^14.0.2
 
 dev_dependencies:
   flutter_test:
@@ -84,3 +100,4 @@ flutter:
     - assets/images/
     - assets/animations/
     - assets/models/
+    - assets/data/

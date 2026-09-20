@@ -2,7 +2,6 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
 import '../config/env.dart';
@@ -31,28 +30,24 @@ class PaymentService {
   void setPlan(String plan) => _currentPlan = plan;
 
   Future<void> openCheckout({
-    required String plan, // 'pro' | 'farm'
-    required String userId,
-    required String email,
-    int? amountInPaise,
-    String phone = '',
+    required String plan,
+    required String userEmail,
+    required String userContact,
+    String? planName,
+    int? customAmountPaise,
   }) async {
     _currentPlan = plan;
-    int? defaultAmount;
-    if (plan == 'pro') {
-      defaultAmount = AppConstants.proMonthlyPaise;
-    } else if (plan == 'farm') {
-      defaultAmount = AppConstants.farmMonthlyPaise;
-    } else if (plan == 'trial') {
-      defaultAmount = 100; // 1 Rupee in paise
+
+    int amount = customAmountPaise ?? AppConstants.proMonthlyPaise;
+    if (plan == 'farm' && customAmountPaise == null) {
+      amount = AppConstants.farmMonthlyPaise;
+    } else if (plan == 'trial' && customAmountPaise == null) {
+      amount = 100;
+    } else if (plan == 'emergency_doctor' && customAmountPaise == null) {
+      amount = 1000;
     }
 
-    final amount = amountInPaise ?? (defaultAmount ?? 100);
-    final rupeeAmount = amount ~/ 100;
-
     String? orderId;
-
-    // 1. Try to create order on backend edge function if available
     try {
       final res = await Supabase.instance.client.functions.invoke(
         'razorpay-checkout',
@@ -60,32 +55,27 @@ class PaymentService {
           'action': 'create_order',
           'amount': amount,
           'currency': 'INR',
-          'user_id': userId,
-          'plan': plan,
+          'receipt': 'rcpt_${DateTime.now().millisecondsSinceEpoch}',
+          'notes': {'plan': plan, 'email': userEmail},
         },
       );
-      if (res.data != null && res.data['id'] != null) {
-        orderId = res.data['id'];
+      if (res.data != null && res.data['order_id'] != null) {
+        orderId = res.data['order_id'] as String;
       }
     } catch (e) {
-      debugPrint('Edge function order creation skipped/fallback: $e');
+      debugPrint('Edge function order fallback: $e');
     }
 
-    // 2. Open Razorpay checkout (with orderId or standard direct test mode options)
-    final options = <String, dynamic>{
-      'key': Env.razorpayTestKeyId,
+    final options = {
+      'key': Env.razorpayKeyId,
       'amount': amount,
       'name': 'PhytoLens',
-      'description': plan == 'trial' ? '2-Day Trial Activation - ₹$rupeeAmount' : (plan == 'pro' ? 'Pro Plan - ₹$rupeeAmount/month' : 'Farm Pack - ₹$rupeeAmount/month'),
-      'currency': 'INR',
+      'description': planName ?? '$plan Subscription — PhytoLens AI',
+      'timeout': 300,
       if (orderId != null) 'order_id': orderId,
       'prefill': {
-        if (phone.isNotEmpty) 'contact': phone,
-        if (email.isNotEmpty) 'email': email,
-      },
-      'notes': {
-        'user_id': userId,
-        'plan': plan,
+        'contact': userContact.isNotEmpty ? userContact : '9999999999',
+        'email': userEmail.isNotEmpty ? userEmail : 'farmer@phytolens.com',
       },
       'theme': {'color': '#10B981'},
     };
@@ -99,7 +89,7 @@ class PaymentService {
   }
 
   Future<void> _handleSuccess(PaymentSuccessResponse response) async {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
 
     final plan = _currentPlan ?? 'pro';
@@ -107,6 +97,7 @@ class PaymentService {
     int amount = AppConstants.proMonthlyPaise;
     if (plan == 'farm') amount = AppConstants.farmMonthlyPaise;
     if (plan == 'trial') amount = 100;
+    if (plan == 'emergency_doctor') amount = 1000;
 
     try {
       // 1. Attempt backend verification
@@ -128,10 +119,17 @@ class PaymentService {
 
       // 2. Guaranteed subscription update in Supabase
       if (plan == 'trial') {
-        await _supabase.activateTrial(user.uid);
+        await _supabase.activateTrial(user.id);
+      } else if (plan == 'emergency_doctor') {
+        await _supabase.updateSubscription(
+          user.id,
+          'pro',
+          days: 1,
+          razorpaySubscriptionId: response.paymentId,
+        );
       } else {
         await _supabase.updateSubscription(
-          user.uid,
+          user.id,
           plan,
           days: 30,
           razorpaySubscriptionId: response.paymentId,
@@ -141,7 +139,7 @@ class PaymentService {
       // 3. Record payment record with exact Supabase table schema
       try {
         await _supabase.savePayment(
-          userId: user.uid,
+          userId: user.id,
           amount: amount ~/ 100,
           plan: plan,
           razorpayPaymentId: response.paymentId ?? 'test_${DateTime.now().millisecondsSinceEpoch}',

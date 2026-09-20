@@ -191,12 +191,13 @@ class TypingIndicator extends StatelessWidget {
 
 /// Mini dots for button loading state
 class ButtonDots extends StatelessWidget {
-  const ButtonDots({super.key});
+  final Color color;
+  const ButtonDots({super.key, this.color = Colors.white});
 
   @override
   Widget build(BuildContext context) {
-    return const LoadingDots(
-      color: Colors.white,
+    return LoadingDots(
+      color: color,
       size: 6,
     );
   }

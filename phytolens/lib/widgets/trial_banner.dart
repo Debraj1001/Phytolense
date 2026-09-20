@@ -28,6 +28,7 @@ class TrialBanner extends StatelessWidget {
 
     final isExpired = trialInfo.isExpired;
     final isExpiringSoon = trialInfo.isExpiringSoon;
+    final isNotStarted = trialInfo.isNotStarted;
 
     // Color scheme adapts to urgency
     final Color bgColor = isExpired
@@ -40,10 +41,12 @@ class TrialBanner extends StatelessWidget {
             : AppColors.primary.withValues(alpha: 0.3));
     final Color accentColor = isExpired
         ? AppColors.error
-        : (isExpiringSoon ? AppColors.warning : AppColors.primary);
+        : (isExpiringSoon ? AppColors.warning : AppColors.primaryDark);
     final IconData leadingIcon = isExpired
         ? Icons.lock_outline_rounded
-        : (isExpiringSoon ? Icons.warning_amber_rounded : Icons.hourglass_bottom_rounded);
+        : (isExpiringSoon
+            ? Icons.warning_amber_rounded
+            : (isNotStarted ? Icons.stars_rounded : Icons.hourglass_bottom_rounded));
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -82,21 +85,24 @@ class TrialBanner extends StatelessWidget {
                 ),
               ),
 
-              // Upgrade CTA
-              if (isExpired || isExpiringSoon)
+              // Upgrade / Activate CTA
+              if (isExpired || isExpiringSoon || isNotStarted)
                 BouncingButton(
                   onTap: onUpgradeTap,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [accentColor, accentColor.withValues(alpha: 0.8)],
+                        colors: [
+                          isNotStarted ? AppColors.primary : accentColor,
+                          isNotStarted ? AppColors.primaryDark : accentColor.withValues(alpha: 0.8),
+                        ],
                       ),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Text(
-                      'Upgrade',
-                      style: TextStyle(
+                    child: Text(
+                      isNotStarted ? 'Activate ₹1' : (isExpired ? 'Upgrade' : 'Renew'),
+                      style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         color: Colors.white,
@@ -108,7 +114,7 @@ class TrialBanner extends StatelessWidget {
           ),
 
           // Progress bar (only for active / expiring soon)
-          if (!isExpired) ...[
+          if (trialInfo.isActive) ...[
             const SizedBox(height: 10),
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
@@ -140,6 +146,16 @@ class TrialBanner extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ] else if (isNotStarted) ...[
+            const SizedBox(height: 4),
+            const Text(
+              'Unlimited disease detection & AI remedies • Instant activation (no auto-renew)',
+              style: TextStyle(
+                fontSize: 11,
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ],

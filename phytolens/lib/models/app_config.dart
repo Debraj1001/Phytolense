@@ -34,12 +34,12 @@ class AppConfig {
   final bool trialEnabled;
 
   const AppConfig({
-    this.freeScanLimit = 15,
-    this.proScanLimit = 50,
-    this.farmScanLimit = 100,
-    this.freeAiLimit = 15,
-    this.proAiLimit = 50,
-    this.farmAiLimit = 100,
+    this.freeScanLimit = 50,
+    this.proScanLimit = 100,
+    this.farmScanLimit = -1,
+    this.freeAiLimit = 50,
+    this.proAiLimit = 100,
+    this.farmAiLimit = -1,
     this.proMonthlyPrice = 49,
     this.farmMonthlyPrice = 199,
     this.freeTierDays = 3,
@@ -72,12 +72,12 @@ class AppConfig {
     }
 
     return AppConfig(
-      freeScanLimit: parseLimit(freePlan?['daily_scan_limit'] ?? m['free_daily_scan_limit'], 15),
-      proScanLimit: parseLimit(proPlan?['daily_scan_limit'] ?? m['pro_daily_scan_limit'], 50),
-      farmScanLimit: parseLimit(farmPlan?['daily_scan_limit'] ?? m['farm_daily_scan_limit'], 100),
+      freeScanLimit: parseLimit(freePlan?['daily_scan_limit'] ?? m['free_daily_scan_limit'], 50),
+      proScanLimit: parseLimit(proPlan?['daily_scan_limit'] ?? m['pro_daily_scan_limit'], 100),
+      farmScanLimit: parseLimit(farmPlan?['daily_scan_limit'] ?? m['farm_daily_scan_limit'], -1),
 
-      freeAiLimit: parseLimit(freePlan?['daily_ai_limit'] ?? m['free_daily_ai_limit'], 15),
-      proAiLimit: parseLimit(proPlan?['daily_ai_limit'] ?? m['pro_daily_ai_limit'], 50),
+      freeAiLimit: parseLimit(freePlan?['daily_ai_limit'] ?? m['free_daily_ai_limit'], 50),
+      proAiLimit: parseLimit(proPlan?['daily_ai_limit'] ?? m['pro_daily_ai_limit'], 100),
       farmAiLimit: parseLimit(farmPlan?['daily_ai_limit'] ?? m['farm_daily_ai_limit'], 100),
 
       proMonthlyPrice: parseLimit(proPlan?['monthly_price'] ?? m['pro_monthly_price'], 49),

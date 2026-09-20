@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/scan_limit_provider.dart';
 import '../../services/ml_service.dart';
 import '../../services/groq_service.dart';
@@ -15,11 +15,13 @@ import '../../services/plantnet_service.dart';
 import '../../services/scan_limiter.dart';
 import '../../services/sync_service.dart';
 import '../../services/permission_service.dart';
+import '../../data/local_database.dart';
 import '../../models/scan_result.dart';
 import '../../theme/colors.dart';
 
 import 'dart:async';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../providers/app_config_provider.dart';
+import '../../providers/ai_settings_provider.dart';
 import '../subscription/upgrade_screen.dart';
 import '../subscription/trial_activation_screen.dart';
 import 'result_screen.dart';
@@ -42,10 +44,12 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
   final _plantNet = PlantNetService();
   final _limiter = ScanLimiter();
   final _syncService = SyncService();
+  final _localDb = LocalDatabase();
 
   bool _analyzing = false;
   File? _selectedImage;
   ScanLimitResult? _limitResult;
+  String _scanStage = '';
 
   @override
   void initState() {
@@ -54,7 +58,6 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
     _ml.initialize();
     _checkConnectivity();
     _refreshLimit();
-    _checkFirstLaunch();
   }
 
   @override
@@ -73,41 +76,6 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
 
   Future<void> _checkConnectivity() async {
     // Only check online status internally if needed, removed UI bindings.
-  }
-
-  Future<void> _checkFirstLaunch() async {
-    final prefs = await SharedPreferences.getInstance();
-    final hasSeenInfo = prefs.getBool('has_seen_model_info_v2') ?? false;
-    if (!hasSeenInfo) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _showFirstLaunchInfo();
-        prefs.setBool('has_seen_model_info_v2', true);
-      });
-    }
-  }
-
-  void _showFirstLaunchInfo() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.surfaceDark,
-        title: const Text('Smart Plant Scanner', style: TextStyle(color: AppColors.textPrimary)),
-        content: const Text(
-          'PhytoLens uses a multi-model AI pipeline to identify plants:\n\n'
-          '🔬 On-device TFLite model for instant offline detection of 14 crop types and 38 diseases.\n\n'
-          '🌿 Pl@ntNet botanical engine for 82,000+ plant species identification online.\n\n'
-          '🤖 AI fallback for general object recognition.\n\n'
-          'For best results, ensure clear, well-lit photos of leaves or flowers.',
-          style: TextStyle(color: AppColors.textSecondary, height: 1.4),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Got it', style: TextStyle(color: AppColors.primary)),
-          ),
-        ],
-      ),
-    );
   }
 
   void _openSupportedCrops() {
@@ -166,6 +134,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
     setState(() {
       _selectedImage = file;
       _analyzing = true;
+      _scanStage = 'Analyzing leaf...';
     });
 
     try {
@@ -177,10 +146,13 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
       double confidence = mlResult.confidence;
       int healthScore = mlResult.healthScore;
       String? remedy;
+      String aiSource = 'cloud'; // Track where AI analysis came from
       bool identifiedByPlantNet = false;
 
       bool isOnline = await _syncService.isOnline();
       final String userTier = limit.tier;
+
+      if (mounted) setState(() => _scanStage = 'Identifying plant...');
 
       // ── TIER 2: Pl@ntNet API (online botanical identification) ─────────
       if (isOnline && (confidence < 0.70 || plantName == 'Unknown Plant' || diseaseName == 'Unrecognized')) {
@@ -235,24 +207,43 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
       }
 
       // ── Generate tier-aware disease report via Groq (TEXT only) ────────
-      if (isOnline && diseaseName != 'Object (Non-Plant)' &&
+      if (diseaseName != 'Object (Non-Plant)' &&
           plantName != 'Unknown Plant' && plantName != 'Unrecognized Item') {
+        if (mounted) setState(() => _scanStage = 'Generating report...');
         try {
-          remedy = await _groq.getTieredAdvice(
-            tier: userTier,
-            plantName: plantName,
-            diseaseName: diseaseName,
-            healthScore: healthScore,
-          );
+          final isAiEngineEnabled = ref.read(aiEngineProvider);
+          if (isOnline && isAiEngineEnabled) {
+            remedy = await _groq.getTieredAdvice(
+              tier: userTier,
+              plantName: plantName,
+              diseaseName: diseaseName,
+              healthScore: healthScore,
+            );
+          } else {
+            throw Exception(isOnline ? 'AI Engine Disabled by User' : 'Offline mode active');
+          }
         } catch (e) {
-          debugPrint('Groq report generation error: $e');
+          debugPrint('Online report skipped/failed: $e');
+          aiSource = 'offline';
+          if (mlResult.treatmentData != null) {
+            final td = mlResult.treatmentData!;
+            remedy = "### Offline Diagnosis: ${td['status']}\n\n"
+                     "**Severity:** ${td['severity']}\n"
+                     "**Immediate Action:** ${td['action']}\n\n"
+                     "**Bio-Organic Remedy:** ${td['bio_remedy']}\n\n"
+                     "**Chemical Alternative:** ${td['chemical_remedy']}";
+          }
         }
       }
 
+      // Ensure remedy is never null
+      remedy ??= 'Scan complete. $plantName detected with $diseaseName. '
+          'Connect to the internet for a detailed AI treatment report.';
+
       // ── Prepare ScanResult (User will choose whether to save) ────────
-      final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+      final uid = Supabase.instance.client.auth.currentUser?.id ?? '';
       final scanResult = ScanResult(
-        id: 'temp_${DateTime.now().millisecondsSinceEpoch}',
+        id: 'scan_${DateTime.now().millisecondsSinceEpoch}',
         userId: uid,
         diseaseName: diseaseName,
         diseaseConfidence: confidence,
@@ -261,7 +252,11 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
         remedy: remedy,
         scannedAt: DateTime.now(),
         imageUrl: file.path,
+        aiSource: aiSource,
       );
+
+      // ── Save to local DB immediately (offline-first) ──────────────────
+      await _localDb.upsertScan(scanResult, synced: isOnline);
 
       if (mounted) {
         setState(() => _analyzing = false);
@@ -334,9 +329,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
   }
 
   void _showLimitDialog(ScanLimitResult limit) {
+    final cfg = ref.read(appConfigProvider).value ?? const AppConfig();
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.cardDark,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -345,31 +341,33 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('🥀', style: TextStyle(fontSize: 40)),
+            Text(limit.isNotStarted ? '🌱' : (limit.isExpired ? '🥀' : '⏳'), style: const TextStyle(fontSize: 40)),
             const SizedBox(height: 16),
             Text(
-              limit.isExpired ? 'Trial Expired' : 'Your Plant Can\'t Wait',
-              style: const TextStyle(
+              limit.isNotStarted
+                  ? '${cfg.trialDays}-Day Pro Trial Required'
+                  : (limit.isExpired ? 'Trial Concluded' : 'Daily Scan Limit Reached'),
+              style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
-                color: AppColors.warning,
+                color: limit.isNotStarted ? AppColors.primaryDark : (limit.isExpired ? AppColors.error : AppColors.warning),
               ),
             ),
             const SizedBox(height: 12),
             Text(
-              limit.isExpired 
-                  ? 'Your 2-day trial has expired. Upgrade to Pro for instant, unlimited health analysis and save your plants today.'
-                  : (limit.isNotStarted
-                      ? 'Activate your 2-Day Trial to start identifying and treating your plants.'
-                      : 'You\'ve reached your daily free scan limit. Don\'t let your plants suffer—upgrade to Pro for instant, unlimited health analysis and save them today.'),
+              limit.isNotStarted
+                  ? 'Activate your ${cfg.trialDays}-Day Pro Trial for just ₹${cfg.trialPrice.toInt()} to unlock ${cfg.proScanLabel} AI leaf diagnostics, remedies, and treatment guides.'
+                  : (limit.isExpired 
+                      ? 'Your ${cfg.trialDays}-day Pro trial has ended. Upgrade to Pro (${cfg.proPrice}/month) or Farm Pack (${cfg.farmPrice}/month) to continue scanning.'
+                      : 'You\'ve reached your daily scan limit of ${limit.limit} scans. Upgrade your plan for higher daily allowances.'),
               style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.4),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
-            if (!limit.isExpired) const _MidnightCountdownText(),
-            if (!limit.isExpired) const SizedBox(height: 24),
+            if (!limit.isExpired && !limit.isNotStarted) const _MidnightCountdownText(),
+            if (!limit.isExpired && !limit.isNotStarted) const SizedBox(height: 24),
             FilledButton.icon(
-              icon: const Icon(Icons.flash_on_rounded, size: 18),
+              icon: Icon(limit.isNotStarted ? Icons.stars_rounded : Icons.flash_on_rounded, size: 18),
               onPressed: () {
                 Navigator.pop(context);
                 if (limit.isNotStarted) {
@@ -390,7 +388,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9999)),
               ),
               label: Text(
-                limit.isNotStarted ? 'Activate 2-Day Trial (₹1)' : 'Unlock Unlimited Scans Now',
+                limit.isNotStarted
+                    ? 'Activate ${cfg.trialDays}-Day Trial (₹${cfg.trialPrice.toInt()})'
+                    : (limit.isExpired ? 'Upgrade Plan — From ${cfg.proPrice}/mo' : 'Upgrade Plan'),
                 style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
               ),
             ),
@@ -412,7 +412,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
     final limitDisplay = scanLimitState.value ?? _limitResult;
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundDark,
+      backgroundColor: AppColors.lightBg,
       body: Stack(
         children: [
           // Edge-to-edge Image preview / placeholder
@@ -425,109 +425,101 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
             )
           else
             Positioned.fill(
-              child: Container(color: AppColors.backgroundDark),
+              child: Container(color: AppColors.lightBg),
             ),
 
           SafeArea(
             child: Column(
               children: [
-                // Header (Glassmorphic)
+                // Clean header bar
                 Container(
-                  margin: const EdgeInsets.all(20),
-                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                  margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceDark.withValues(alpha: 0.8),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: AppColors.textMuted.withValues(alpha: 0.1)),
+                    color: Colors.white.withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.lightBorder.withValues(alpha: 0.5)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.psychology, color: AppColors.primary, size: 28),
-                      const SizedBox(width: 12),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Plant Scanner',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary,
-                              ),
+                      // Scan limit chip
+                      if (limitDisplay != null)
+                        GestureDetector(
+                          onTap: () {
+                            if (limitDisplay.isNotStarted) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const TrialActivationScreen()),
+                              );
+                            } else if (!limitDisplay.isUnlimited) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const UpgradeScreen()),
+                              );
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: _getLimitColor(limitDisplay).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            Text(
-                              'AI-Powered Disease Detection',
+                            child: Text(
+                              _getLimitText(limitDisplay),
                               style: TextStyle(
                                 fontSize: 12,
-                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w600,
+                                color: _getLimitColor(limitDisplay),
                               ),
                             ),
-                          ],
+                          ),
                         ),
-                      ),
+                      const Spacer(),
+                      // Supported crops
                       IconButton(
-                        icon: const Icon(Icons.menu_book_rounded, color: AppColors.primaryLight),
+                        icon: const Icon(Icons.menu_book_rounded, color: AppColors.primary, size: 22),
                         onPressed: _openSupportedCrops,
                         tooltip: 'Supported Crops',
+                        visualDensity: VisualDensity.compact,
                       ),
-                      if (limitDisplay != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: limitDisplay.remaining == -1
-                                ? AppColors.primary.withValues(alpha: 0.2)
-                                : limitDisplay.remaining > 0
-                                    ? AppColors.success.withValues(alpha: 0.2)
-                                    : AppColors.error.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: limitDisplay.remaining == -1
-                                  ? AppColors.primary.withValues(alpha: 0.5)
-                                  : limitDisplay.remaining > 0
-                                      ? AppColors.success.withValues(alpha: 0.5)
-                                      : AppColors.error.withValues(alpha: 0.5),
-                            ),
-                          ),
-                          child: Text(
-                            limitDisplay.remaining == -1
-                                ? 'Unlimited'
-                                : '${limitDisplay.remaining} Scans Left',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: limitDisplay.remaining == -1
-                                  ? AppColors.primaryLight
-                                  : limitDisplay.remaining > 0
-                                      ? AppColors.success
-                                      : AppColors.error,
-                            ),
-                          ),
-                        ),
+                      // Tips
+                      IconButton(
+                        icon: const Icon(Icons.lightbulb_outline_rounded, color: AppColors.lightTextSecondary, size: 22),
+                        onPressed: _showTips,
+                        tooltip: 'Tips',
+                        visualDensity: VisualDensity.compact,
+                      ),
                     ],
                   ),
-                ).animate().slideY(begin: -0.2, end: 0).fadeIn(),
+                ).animate().slideY(begin: -0.15, end: 0, duration: 250.ms, curve: Curves.easeOutCubic).fadeIn(duration: 200.ms),
 
                 Expanded(
                   child: _selectedImage == null ? _buildPlaceholder() : const SizedBox.shrink(),
                 ),
 
-                // Glossy Floating Action Bar with 3 unified buttons
+                // Light Frosted Floating Action Bar with 3 unified buttons
                 Container(
                   margin: const EdgeInsets.fromLTRB(28, 0, 28, 16),
-                  height: 70,
+                  height: 72,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(28),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.55),
-                        blurRadius: 28,
-                        spreadRadius: 2,
-                        offset: const Offset(0, 8),
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 20,
+                        spreadRadius: 1,
+                        offset: const Offset(0, 6),
                       ),
                       BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.15),
-                        blurRadius: 18,
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        blurRadius: 12,
                         offset: const Offset(0, 2),
                       ),
                     ],
@@ -539,10 +531,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         decoration: BoxDecoration(
-                          color: const Color(0xE0121A17),
+                          color: Colors.white.withValues(alpha: 0.94),
                           borderRadius: BorderRadius.circular(28),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.14),
+                            color: const Color(0xFFE2E8F0),
                             width: 1.2,
                           ),
                         ),
@@ -557,15 +549,15 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
                                 height: 46,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: Colors.white.withValues(alpha: 0.08),
+                                  color: const Color(0xFFF1F5F9),
                                   border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.12),
+                                    color: const Color(0xFFE2E8F0),
                                   ),
                                 ),
                                 child: const Icon(
                                   Icons.photo_library_outlined,
                                   size: 21,
-                                  color: Colors.white,
+                                  color: AppColors.lightTextPrimary,
                                 ),
                               ),
                             ),
@@ -583,15 +575,15 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
                                 height: 46,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: Colors.white.withValues(alpha: 0.08),
+                                  color: const Color(0xFFF1F5F9),
                                   border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.12),
+                                    color: const Color(0xFFE2E8F0),
                                   ),
                                 ),
                                 child: const Icon(
                                   Icons.info_outline_rounded,
                                   size: 21,
-                                  color: Colors.white,
+                                  color: AppColors.lightTextPrimary,
                                 ),
                               ),
                             ),
@@ -605,93 +597,90 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
             ),
           ),
 
-          // Modern Professional Scanning Overlay
+          // Modern Professional Scanning Overlay with pipeline stages (Option A Light Theme)
           if (_analyzing)
             Container(
-              color: Colors.black.withValues(alpha: 0.85),
-              child: Center(
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 36),
-                  padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 28),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF131A22).withValues(alpha: 0.95),
-                    borderRadius: BorderRadius.circular(28),
-                    border: Border.all(color: AppColors.primaryLight.withValues(alpha: 0.25), width: 1.2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.2),
-                        blurRadius: 36,
-                        spreadRadius: 2,
-                      ),
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.6),
-                        blurRadius: 24,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Glowing Optics Scanner Icon
-                      Container(
-                        width: 68,
-                        height: 68,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: AppColors.primary.withValues(alpha: 0.15),
-                          border: Border.all(
-                            color: AppColors.primaryLight.withValues(alpha: 0.4),
-                            width: 1.5,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.primaryLight.withValues(alpha: 0.25),
-                              blurRadius: 22,
+              color: Colors.black.withValues(alpha: 0.35),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                child: Center(
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 36),
+                    padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 28),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(28),
+                      border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.12),
+                          blurRadius: 30,
+                          spreadRadius: 2,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Glowing Scanner Icon
+                        Container(
+                          width: 64,
+                          height: 64,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFFD1FAE5),
+                            border: Border.all(
+                              color: AppColors.primaryLight,
+                              width: 1.5,
                             ),
-                          ],
-                        ),
-                        child: const Center(
-                          child: Icon(
-                            Icons.document_scanner_rounded,
-                            color: AppColors.primaryLight,
-                            size: 32,
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.document_scanner_rounded,
+                              color: AppColors.primary,
+                              size: 28,
+                            ),
+                          ),
+                        )
+                            .animate(onPlay: (c) => c.repeat(reverse: true))
+                            .scale(begin: const Offset(0.95, 0.95), end: const Offset(1.05, 1.05), duration: 1200.ms),
+
+                        const SizedBox(height: 20),
+
+                        // Pipeline stage text
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 200),
+                          child: Text(
+                            _scanStage,
+                            key: ValueKey(_scanStage),
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.lightTextPrimary,
+                              letterSpacing: -0.2,
+                            ),
                           ),
                         ),
-                      )
-                          .animate(onPlay: (c) => c.repeat(reverse: true))
-                          .scale(begin: const Offset(0.95, 0.95), end: const Offset(1.05, 1.05), duration: 1200.ms),
 
-                      const SizedBox(height: 24),
+                        const SizedBox(height: 16),
 
-                      // Single clean prompt text
-                      const Text(
-                        'wait, while we scan',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          letterSpacing: -0.2,
+                        // Progress Bar
+                        Container(
+                          height: 4,
+                          width: double.infinity,
+                          clipBehavior: Clip.antiAlias,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE2E8F0),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const LinearProgressIndicator(
+                            backgroundColor: Colors.transparent,
+                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                          ),
                         ),
-                      ),
-
-                      const SizedBox(height: 20),
-
-                      // Modern Professional Progress Bar
-                      Container(
-                        height: 6,
-                        width: double.infinity,
-                        clipBehavior: Clip.antiAlias,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const LinearProgressIndicator(
-                          backgroundColor: Colors.transparent,
-                          valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryLight),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -756,12 +745,28 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
   void _showTips() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.cardDark,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (_) => const _TipsSheet(),
     );
+  }
+
+  // ── Helper methods for clean scan limit display ────────────────────────
+  Color _getLimitColor(ScanLimitResult limit) {
+    if (limit.isNotStarted) return AppColors.primary;
+    if (limit.isExpired) return AppColors.warning;
+    if (limit.isUnlimited) return AppColors.primary;
+    if (limit.remaining > 0) return AppColors.lightSuccess;
+    return AppColors.lightError;
+  }
+
+  String _getLimitText(ScanLimitResult limit) {
+    if (limit.isNotStarted) return '₹1 Trial';
+    if (limit.isExpired) return 'Trial Ended';
+    if (limit.isUnlimited) return '∞ Unlimited';
+    return '${limit.remaining} left';
   }
 
 

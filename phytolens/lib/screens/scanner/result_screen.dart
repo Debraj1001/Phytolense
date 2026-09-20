@@ -3,9 +3,10 @@
 
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import '../../providers/scan_limit_provider.dart';
 import '../../providers/ai_limit_provider.dart';
 import '../../providers/user_provider.dart';
@@ -49,6 +50,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
   final _supabase = SupabaseService();
   final _syncService = SyncService();
   final _limiter = ScanLimiter();
+  final FlutterTts _tts = FlutterTts();
 
   late ScanResult _currentScan;
   late bool _isSaved;
@@ -58,6 +60,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
   bool _loadingAdvice = false;
   bool _addedToGarden = false;
   bool _addingToGarden = false;
+  bool _isSpeaking = false;
 
   @override
   void initState() {
@@ -66,6 +69,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
     _isSaved = widget.isSaved || (widget.scan.id.isNotEmpty && !widget.scan.id.startsWith('temp_'));
 
     _initAdvice();
+    _initTts();
 
     // Optimistic Auto-Save: Automatically persist to care log immediately
     if (!_isSaved) {
@@ -73,6 +77,41 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
         _autoSaveScan();
       });
     }
+  }
+
+  void _initTts() async {
+    await _tts.setLanguage('en-IN');
+    await _tts.setSpeechRate(0.45);
+    await _tts.setPitch(1.0);
+    _tts.setCompletionHandler(() {
+      if (mounted) setState(() => _isSpeaking = false);
+    });
+  }
+
+  Future<void> _speak(String text) async {
+    // Strip markdown formatting for cleaner TTS
+    final clean = text
+        .replaceAll(RegExp(r'[#*_`~>]'), '')
+        .replaceAll(RegExp(r'\[.*?\]\(.*?\)'), '')
+        .replaceAll(RegExp(r'\|.*?\|'), '')
+        .replaceAll(RegExp(r'---+'), '')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+        .trim();
+
+    if (_isSpeaking) {
+      await _tts.stop();
+      if (mounted) setState(() => _isSpeaking = false);
+      return;
+    }
+
+    setState(() => _isSpeaking = true);
+    await _tts.speak(clean);
+  }
+
+  @override
+  void dispose() {
+    _tts.stop();
+    super.dispose();
   }
 
   void _initAdvice() {
@@ -129,7 +168,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
   }
 
   Future<void> _autoSaveScan() async {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = Supabase.instance.client.auth.currentUser;
     if (user == null || _isSaved || _saving) return;
 
     setState(() => _saving = true);
@@ -139,12 +178,12 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
       String? imageUrl = _currentScan.imageUrl;
 
       if (isOnline && widget.imageFile != null) {
-        imageUrl = await _supabase.uploadImage(widget.imageFile!, user.uid);
+        imageUrl = await _supabase.uploadImage(widget.imageFile!, user.id);
       }
 
       final scanToSave = ScanResult(
         id: '',
-        userId: user.uid,
+        userId: user.id,
         diseaseName: _currentScan.diseaseName,
         diseaseConfidence: _currentScan.diseaseConfidence,
         plantName: _currentScan.plantName,
@@ -181,13 +220,13 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
   }
 
   Future<void> _addToGarden() async {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = Supabase.instance.client.auth.currentUser;
     if (user == null || _addingToGarden || _addedToGarden) return;
 
     setState(() => _addingToGarden = true);
     try {
       final plant = await _supabase.addPlant(
-        user.uid,
+        user.id,
         _currentScan.plantName,
         _currentScan.plantName,
         imageUrl: _currentScan.imageUrl,
@@ -284,7 +323,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
 
           // ── Body Content ──────────────────────────────────────────────────
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 70),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
                 // Auto-save notification pill
@@ -357,14 +396,14 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
 
   Widget _buildDiagnosisCard() {
     final isHealthy = _currentScan.isHealthy;
-    final statusColor = isHealthy ? AppColors.primaryLight : AppColors.warning;
+    final statusColor = isHealthy ? AppColors.primaryDark : AppColors.warning;
 
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        border: Border.all(color: AppColors.lightBorder),
       ),
       child: Row(
         children: [
@@ -378,14 +417,40 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  _currentScan.plantName.isNotEmpty ? _currentScan.plantName : 'Plant Leaf',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                    letterSpacing: -0.3,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _currentScan.plantName.isNotEmpty ? _currentScan.plantName : 'Plant Leaf',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textPrimary,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                    ),
+                    if (_currentScan.aiSource == 'offline')
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text('OFFLINE AI', style: TextStyle(fontSize: 9, color: AppColors.primaryDark, fontWeight: FontWeight.bold)),
+                      )
+                    else if (_currentScan.aiSource == 'cloud')
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.secondary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text('CLOUD AI', style: TextStyle(fontSize: 9, color: AppColors.secondary, fontWeight: FontWeight.bold)),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 4),
                 Row(
@@ -417,6 +482,28 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
                   '${(_currentScan.diseaseConfidence * 100).round()}% match confidence',
                   style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
                 ),
+                if (!isHealthy) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Text('Severity:', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: _currentScan.severityPercent / 100,
+                            minHeight: 6,
+                            backgroundColor: AppColors.lightBorder,
+                            color: _currentScan.severityPercent > 75 ? AppColors.error : (_currentScan.severityPercent > 40 ? AppColors.warning : AppColors.primary),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text('${_currentScan.severityPercent}%', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -443,18 +530,44 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.spa_rounded, color: AppColors.primary, size: 18),
-              SizedBox(width: 8),
-              Text(
-                'Care Recommendations',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
+              const Icon(Icons.spa_rounded, color: AppColors.primary, size: 18),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Care Recommendations',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
               ),
+              // ── Voice Read-Aloud Button ──────────────────────────────
+              if (_aiAdvice != null && !_loadingAdvice)
+                GestureDetector(
+                  onTap: () => _speak(_aiAdvice!),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: _isSpeaking
+                          ? AppColors.primary.withValues(alpha: 0.12)
+                          : const Color(0xFFF1F5F9),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      _isSpeaking
+                          ? Icons.stop_rounded
+                          : Icons.volume_up_rounded,
+                      color: _isSpeaking
+                          ? AppColors.primary
+                          : const Color(0xFF64748B),
+                      size: 16,
+                    ),
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 14),

@@ -12,16 +12,16 @@ class AppConstants {
   static const String tierFarm = 'farm';
 
   // Trial System
-  static const int defaultTrialDays = 3;
+  static const int defaultTrialDays = 2;
   static const int trialWarningDaysThreshold = 2;
   // Post-trial "starter" limits (never fully locked out)
   static const int starterDailyScanLimit = 1;
   static const int starterDailyAiLimit = 1;
 
   // Daily Limits
-  static const int freeDailyScanLimit = 3;
-  static const int freeDailyAiLimit = 3;
-  static const int proDailyAiLimit = 20;
+  static const int freeDailyScanLimit = 50;
+  static const int freeDailyAiLimit = 50;
+  static const int proDailyAiLimit = 100;
 
   // Prices (in paise for Razorpay)
   static const int proMonthlyPaise = 4900;    // ₹49

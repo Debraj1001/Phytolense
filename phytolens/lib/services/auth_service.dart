@@ -1,23 +1,78 @@
+// lib/services/auth_service.dart
+
 import 'package:flutter/foundation.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide User;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/app_user.dart';
-
 import 'supabase_service.dart';
 import 'notification_service.dart';
 
 class AuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  SupabaseClient get _client => Supabase.instance.client;
+
   static final GoogleSignIn _googleSignIn = GoogleSignIn(
-    serverClientId: '646033659202-3rimcckpeaca490ubm14ho21fgfif121.apps.googleusercontent.com',
+    serverClientId: '829141947094-ul2srm1goo7vt6hkb3b71bipqut8m9fp.apps.googleusercontent.com',
   );
 
-  User? get currentFirebaseUser => _auth.currentUser;
-  Stream<User?> get authStateChanges => _auth.authStateChanges();
+  User? get currentSupabaseUser => _client.auth.currentUser;
+  String? get currentUserId => _client.auth.currentUser?.id;
+  Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
 
-  // Sign in with Google
+  // Send OTP to email via Supabase Auth (pure 6-digit OTP, no confirmation URL)
+  Future<void> sendOtpToEmail(String email) async {
+    await _client.auth.signInWithOtp(
+      email: email.trim(),
+      shouldCreateUser: true,
+    );
+  }
+
+  // Backwards compatible alias
+  Future<void> sendSignInLinkToEmail(String email) => sendOtpToEmail(email);
+
+  // Verify OTP code entered by user (supports 6 or 7 digit variations across all types)
+  Future<AppUser> verifyOtp(String email, String token) async {
+    AuthResponse? res;
+    dynamic lastError;
+
+    final trimmed = token.trim();
+    final candidates = <String>[
+      trimmed,
+      if (trimmed.length >= 7) trimmed.substring(0, 6),
+      if (trimmed.length >= 7) trimmed.substring(1),
+    ];
+
+    final types = [
+      OtpType.email,
+      OtpType.signup,
+      OtpType.magiclink,
+      OtpType.recovery,
+    ];
+
+    for (final candidate in candidates) {
+      for (final type in types) {
+        try {
+          res = await _client.auth.verifyOTP(
+            email: email.trim(),
+            token: candidate,
+            type: type,
+          );
+          if (res.user != null) break;
+        } catch (e) {
+          lastError = e;
+        }
+      }
+      if (res?.user != null) break;
+    }
+
+    if (res == null || res.user == null) {
+      throw lastError ?? Exception('Verification failed: Invalid or expired OTP code');
+    }
+
+    return _handleSupabaseUser(res.user!);
+  }
+
+  // Sign in with Google through Supabase using ID Token
   Future<AppUser> signInWithGoogle() async {
     try {
       if (await _googleSignIn.isSignedIn()) {
@@ -27,73 +82,53 @@ class AuthService {
 
     final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
     if (googleUser == null) {
-      throw Exception('Google sign in aborted');
+      throw Exception('Google sign in aborted by user');
     }
-    
+
     final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-    final credential = GoogleAuthProvider.credential(
-      accessToken: googleAuth.accessToken,
-      idToken: googleAuth.idToken,
-    );
-    
-    final cred = await _auth.signInWithCredential(credential);
-    return _handleFirebaseUser(cred.user!);
-  }
-
-  // Sign in with Email and Password
-  Future<AppUser> signInWithEmailAndPassword(String email, String password) async {
-    final cred = await _auth.signInWithEmailAndPassword(email: email, password: password);
-    return _handleFirebaseUser(cred.user!);
-  }
-
-  // Send Magic Link
-  Future<void> sendSignInLinkToEmail(String email) async {
-    final actionCodeSettings = ActionCodeSettings(
-      url: 'https://phytolens.com/login', // Replace with your actual domain for app links
-      handleCodeInApp: true,
-      androidPackageName: 'com.phytolens.phytolens',
-      androidInstallApp: true,
-      androidMinimumVersion: '1',
-    );
-    await _auth.sendSignInLinkToEmail(
-      email: email,
-      actionCodeSettings: actionCodeSettings,
-    );
-  }
-
-  // Sign in with Email Link
-  Future<AppUser> signInWithEmailLink(String email, String emailLink) async {
-    if (_auth.isSignInWithEmailLink(emailLink)) {
-      final cred = await _auth.signInWithEmailLink(email: email, emailLink: emailLink);
-      return _handleFirebaseUser(cred.user!);
-    } else {
-      throw Exception('Invalid magic link');
+    final idToken = googleAuth.idToken;
+    if (idToken == null) {
+      throw Exception('No ID Token received from Google.');
     }
+
+    final res = await _client.auth.signInWithIdToken(
+      provider: OAuthProvider.google,
+      idToken: idToken,
+      accessToken: googleAuth.accessToken,
+    );
+
+    if (res.user == null) {
+      throw Exception('Supabase Google Sign-In failed');
+    }
+
+    return _handleSupabaseUser(res.user!);
   }
 
-  // Handle Firebase User (fetches from Supabase or creates a new one)
-  Future<AppUser> _handleFirebaseUser(User firebaseUser) async {
+  // Handle Supabase user profile in public.users
+  Future<AppUser> _handleSupabaseUser(User sbUser) async {
+    final uid = sbUser.id;
     try {
-      final existingUser = await SupabaseService().getUser(firebaseUser.uid);
+      final existingUser = await SupabaseService().getUser(uid);
       if (existingUser != null) {
-        // Non-destructive profile sync from Firebase Auth to Supabase
+        final metadata = sbUser.userMetadata ?? {};
+        final displayName = metadata['full_name'] ?? metadata['name'] ?? metadata['display_name'];
+        final avatarUrl = metadata['avatar_url'];
+
         final updates = <String, dynamic>{};
         if ((existingUser.displayName.isEmpty || existingUser.displayName == 'Plant Lover') &&
-            firebaseUser.displayName != null &&
-            firebaseUser.displayName!.isNotEmpty) {
-          updates['display_name'] = firebaseUser.displayName;
+            displayName != null && displayName.toString().isNotEmpty) {
+          updates['display_name'] = displayName.toString();
         }
-        if (existingUser.avatarUrl == null && firebaseUser.photoURL != null) {
-          updates['avatar_url'] = firebaseUser.photoURL;
+        if (existingUser.avatarUrl == null && avatarUrl != null) {
+          updates['avatar_url'] = avatarUrl.toString();
         }
-        if (existingUser.email.isEmpty && firebaseUser.email != null && firebaseUser.email!.isNotEmpty) {
-          updates['email'] = firebaseUser.email;
+        if (existingUser.email.isEmpty && sbUser.email != null) {
+          updates['email'] = sbUser.email!;
         }
         if (updates.isNotEmpty) {
-          await SupabaseService().updateUser(firebaseUser.uid, updates);
+          await SupabaseService().updateUser(uid, updates);
         }
 
-        // Trigger FCM device token sync to Supabase in background
         NotificationService().syncDeviceToken();
 
         return existingUser.copyWith(
@@ -102,33 +137,46 @@ class AuthService {
           email: updates['email'] ?? existingUser.email,
         );
       }
-      
-      final user = AppUser(
-        uid: firebaseUser.uid,
-        email: firebaseUser.email ?? '',
-        displayName: firebaseUser.displayName ?? 'Plant Lover',
-        avatarUrl: firebaseUser.photoURL,
+
+      final metadata = sbUser.userMetadata ?? {};
+      final displayName = metadata['full_name'] ?? metadata['name'] ?? metadata['display_name'] ?? 'Plant Lover';
+      final avatarUrl = metadata['avatar_url'];
+
+      final newUser = AppUser(
+        uid: uid,
+        email: sbUser.email ?? '',
+        displayName: displayName.toString(),
+        avatarUrl: avatarUrl?.toString(),
         createdAt: DateTime.now(),
       );
 
-      await SupabaseService().upsertUser(user);
+      await SupabaseService().upsertUser(newUser);
       NotificationService().syncDeviceToken();
-      return user;
+      return newUser;
     } catch (e) {
-      throw Exception('Failed to handle user in Supabase: $e');
+      debugPrint('Notice in _handleSupabaseUser: $e');
+      final fallback = await SupabaseService().getUser(uid);
+      if (fallback != null) return fallback;
+
+      return AppUser(
+        uid: uid,
+        email: sbUser.email ?? '',
+        displayName: 'Plant Lover',
+        createdAt: DateTime.now(),
+      );
     }
   }
 
-  // Get User from Supabase (with auto-heal fallback)
+  // Get User from Supabase
   Future<AppUser> getUser(String uid) async {
     final user = await SupabaseService().getUser(uid);
     if (user != null) return user;
 
-    final fbUser = _auth.currentUser;
-    if (fbUser != null && fbUser.uid == uid) {
-      return _handleFirebaseUser(fbUser);
+    final sbUser = _client.auth.currentUser;
+    if (sbUser != null && sbUser.id == uid) {
+      return _handleSupabaseUser(sbUser);
     }
-    
+
     return AppUser(
       uid: uid,
       email: '',
@@ -137,31 +185,21 @@ class AuthService {
     );
   }
 
-  // Stream user
   Stream<AppUser?> userStream(String uid) {
     return SupabaseService().streamUser(uid);
   }
 
-  // Sign Out (clears Firebase, Google account, Supabase, and local cache)
+  // Sign Out (clears Google account, Supabase session, and local cache)
   Future<void> signOut() async {
     try {
       await _googleSignIn.signOut();
       await _googleSignIn.disconnect();
     } catch (e) {
-      debugPrint('Google sign out error: $e');
-      try {
-        await _googleSignIn.signOut();
-      } catch (_) {}
+      debugPrint('Google sign out notice: $e');
     }
 
     try {
-      await _auth.signOut();
-    } catch (e) {
-      debugPrint('Firebase sign out error: $e');
-    }
-
-    try {
-      await Supabase.instance.client.auth.signOut();
+      await _client.auth.signOut();
     } catch (e) {
       debugPrint('Supabase sign out error: $e');
     }
@@ -178,27 +216,19 @@ class AuthService {
     }
   }
 
-  // Update Profile
   Future<void> updateProfile(String uid, {String? displayName, String? avatarUrl}) async {
     final updates = <String, dynamic>{};
-    if (displayName != null) {
-      updates['display_name'] = displayName;
-      await _auth.currentUser?.updateDisplayName(displayName);
-    }
+    if (displayName != null) updates['display_name'] = displayName;
     if (avatarUrl != null) updates['avatar_url'] = avatarUrl;
     if (updates.isNotEmpty) {
       await SupabaseService().updateUser(uid, updates);
     }
   }
 
-
-
-  // Update subscription
   Future<void> updateSubscription(String uid, String tier) async {
     await SupabaseService().updateSubscription(uid, tier);
   }
 
-  // Update FCM token
   Future<void> updateFcmToken(String uid, String token) async {
     await SupabaseService().updateUser(uid, {'fcm_token': token});
   }

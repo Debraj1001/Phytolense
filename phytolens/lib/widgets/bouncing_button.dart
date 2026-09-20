@@ -52,21 +52,34 @@ class _BouncingButtonState extends State<BouncingButton> with SingleTickerProvid
     super.dispose();
   }
 
+  bool _isProcessingTap = false;
+
   void _onTapDown(TapDownDetails details) {
-    if (widget.onTap != null) {
+    if (widget.onTap != null && !_isProcessingTap) {
       if (widget.enableHaptics) HapticFeedback.lightImpact();
       _controller.forward();
     }
   }
 
-  void _onTapUp(TapUpDetails details) {
-    if (widget.onTap != null) {
+  void _onTapUp(TapUpDetails details) async {
+    if (widget.onTap != null && !_isProcessingTap) {
       _controller.reverse();
+      
+      // Debounce logic
+      _isProcessingTap = true;
+      widget.onTap!();
+      
+      // Short delay before allowing next tap
+      Future.delayed(const Duration(milliseconds: 400), () {
+        if (mounted) {
+          _isProcessingTap = false;
+        }
+      });
     }
   }
 
   void _onTapCancel() {
-    if (widget.onTap != null) {
+    if (widget.onTap != null && !_isProcessingTap) {
       _controller.reverse();
     }
   }
@@ -78,7 +91,6 @@ class _BouncingButtonState extends State<BouncingButton> with SingleTickerProvid
       onTapDown: _onTapDown,
       onTapUp: _onTapUp,
       onTapCancel: _onTapCancel,
-      onTap: widget.onTap,
       child: ScaleTransition(
         scale: _scaleAnimation,
         child: widget.child,

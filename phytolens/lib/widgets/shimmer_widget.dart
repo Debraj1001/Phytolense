@@ -296,7 +296,9 @@ class ShimmerScanList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return ListView(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       children: List.generate(count, (_) => const ShimmerScanCard()),
     );
   }

@@ -49,16 +49,16 @@ class TrialInfo {
   String get bannerMessage {
     switch (status) {
       case TrialStatus.notStarted:
-        return 'Activate your 2-day trial for just ₹1';
+        return 'Activate your $totalDays-day Pro trial for just ₹1';
       case TrialStatus.active:
-        return '$remainingDays day${remainingDays == 1 ? '' : 's'} left in your trial';
+        return '$remainingDays day${remainingDays == 1 ? '' : 's'} left in Pro trial';
       case TrialStatus.expiringSoon:
         if (remainingDays <= 0) {
-          return 'Last day of your trial';
+          return 'Last day of your Pro trial';
         }
-        return 'Only $remainingDays day${remainingDays == 1 ? '' : 's'} left — upgrade now';
+        return 'Only $remainingDays day${remainingDays == 1 ? '' : 's'} left in Pro trial — upgrade now';
       case TrialStatus.expired:
-        return 'Trial ended — Upgrade to Continue';
+        return 'Trial ended — Upgrade to Pro or Farm Pack';
       case TrialStatus.upgraded:
         return '';
     }
@@ -67,7 +67,7 @@ class TrialInfo {
   String get shortLabel {
     switch (status) {
       case TrialStatus.notStarted:
-        return 'Not Started';
+        return 'Trial Available';
       case TrialStatus.active:
         return '$remainingDays days left';
       case TrialStatus.expiringSoon:

@@ -79,7 +79,7 @@ class _ScanDetailScreenState extends State<ScanDetailScreen> {
                   DateFormat('MMMM d, yyyy • h:mm a').format(widget.scan.scannedAt),
                   style: const TextStyle(
                     fontSize: 12,
-                    color: AppColors.darkTextMuted,
+                    color: AppColors.textMuted,
                   ),
                 ).animate().fadeIn(),
                 
@@ -144,7 +144,7 @@ class _ScanDetailScreenState extends State<ScanDetailScreen> {
             const SizedBox(height: 8),
             Text(
               widget.scan.plantName,
-              style: const TextStyle(color: AppColors.darkTextSecondary, fontSize: 13, fontWeight: FontWeight.w600),
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
             ),
           ],
         ),
@@ -158,7 +158,7 @@ class _ScanDetailScreenState extends State<ScanDetailScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        border: Border.all(color: AppColors.lightBorder),
       ),
       child: Row(
         children: [
@@ -178,7 +178,7 @@ class _ScanDetailScreenState extends State<ScanDetailScreen> {
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.darkTextPrimary,
+                    color: AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -194,7 +194,7 @@ class _ScanDetailScreenState extends State<ScanDetailScreen> {
                         widget.scan.diseaseName,
                         style: const TextStyle(
                           fontSize: 15,
-                          color: AppColors.darkTextSecondary,
+                          color: AppColors.textSecondary,
                         ),
                       ),
                     ),
@@ -212,8 +212,8 @@ class _ScanDetailScreenState extends State<ScanDetailScreen> {
                     'Confidence: ${(widget.scan.diseaseConfidence * 100).round()}%',
                     style: const TextStyle(
                       fontSize: 12,
-                      color: AppColors.primaryLight,
-                      fontWeight: FontWeight.w500,
+                      color: AppColors.primaryDark,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -231,7 +231,7 @@ class _ScanDetailScreenState extends State<ScanDetailScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        border: Border.all(color: AppColors.lightBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -252,7 +252,7 @@ class _ScanDetailScreenState extends State<ScanDetailScreen> {
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.darkTextPrimary,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ],
@@ -263,17 +263,17 @@ class _ScanDetailScreenState extends State<ScanDetailScreen> {
             styleSheet: MarkdownStyleSheet(
               p: const TextStyle(
                 fontSize: 14,
-                color: AppColors.darkTextSecondary,
+                color: AppColors.textSecondary,
                 height: 1.6,
               ),
               strong: const TextStyle(
                 fontSize: 14,
-                color: Colors.white,
+                color: AppColors.textPrimary,
                 fontWeight: FontWeight.w700,
               ),
               listBullet: const TextStyle(
                 fontSize: 14,
-                color: AppColors.primaryLight,
+                color: AppColors.primaryDark,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -301,7 +301,7 @@ class _ScanDetailScreenState extends State<ScanDetailScreen> {
               ),
             ),
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.primaryLight,
+              foregroundColor: AppColors.primaryDark,
               side: const BorderSide(color: AppColors.primary),
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(

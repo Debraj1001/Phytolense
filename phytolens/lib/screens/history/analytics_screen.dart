@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../services/supabase_service.dart';
 import '../../models/scan_result.dart';
@@ -31,7 +31,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
   Future<void> _loadData() async {
     setState(() => _loading = true);
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid == null) {
       setState(() => _loading = false);
       return;
@@ -61,7 +61,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         backgroundColor: AppColors.lightSurface,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 18, color: Colors.white),
+          icon: const Icon(Icons.arrow_back_ios_new, size: 18, color: AppColors.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
@@ -212,7 +212,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(AppTokens.radiusMD),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            border: Border.all(color: AppColors.lightBorder),
           ),
           child: _scans.isEmpty
               ? const Center(child: Text('Scan more plants to populate trend charts', style: TextStyle(color: AppColors.textMuted)))
@@ -258,7 +258,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(AppTokens.radiusMD),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            border: Border.all(color: AppColors.lightBorder),
           ),
           child: Column(
             children: [
@@ -269,7 +269,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           ),
         ),
 
-        const SizedBox(height: 40),
+        const SizedBox(height: 70),
       ],
     );
   }
@@ -280,12 +280,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(AppTokens.radiusMD),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: AppColors.lightBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Weekly Crop Health Score Index', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+          const Text('Weekly Crop Health Score Index', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
           const SizedBox(height: 16),
           SizedBox(
             height: 140,
@@ -323,7 +323,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(AppTokens.radiusMD),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: AppColors.lightBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -354,7 +354,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
             value: pct,
-            backgroundColor: AppColors.lightSurface,
+            backgroundColor: AppColors.lightCardElevated,
             valueColor: AlwaysStoppedAnimation<Color>(color),
             minHeight: 6,
           ),

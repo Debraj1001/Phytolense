@@ -6,7 +6,7 @@ import 'package:flutter_dynamic_icon_plus/flutter_dynamic_icon_plus.dart';
 import 'package:phytolens/theme/colors.dart';
 import 'package:phytolens/screens/home/home_screen.dart';
 import 'package:phytolens/services/supabase_service.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class PremiumTransformationScreen extends ConsumerStatefulWidget {
   final String tier;
@@ -38,7 +38,7 @@ class _PremiumTransformationScreenState extends ConsumerState<PremiumTransformat
     }
 
     // Fetch user data
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid != null) {
       final user = await SupabaseService().getUser(uid);
       if (user != null) {

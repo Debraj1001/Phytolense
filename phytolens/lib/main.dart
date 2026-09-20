@@ -45,17 +45,22 @@ Future<void> main() async {
     debugPrint('Make sure you have configured Firebase using "flutterfire configure"');
   }
 
-  // Supabase
-  await Supabase.initialize(
-    url: Env.supabaseUrl,
-    publishableKey: Env.supabaseAnonKey,
-  );
+  // Supabase — wrapped for offline cold-start resilience
+  try {
+    await Supabase.initialize(
+      url: Env.supabaseUrl,
+      publishableKey: Env.supabaseAnonKey,
+    );
+  } catch (e) {
+    debugPrint('⚠️ Supabase initialization failed (likely offline): $e');
+    debugPrint('App will continue in offline mode.');
+  }
 
-  // Sync Service for offline caching and syncing
-  SyncService().initialize();
-
-  // Initialize FCM Push Notifications & Device Token Sync
-  NotificationService().initialize();
+  // Non-blocking background services — don't hold up app launch
+  Future.microtask(() {
+    SyncService().initialize();
+    NotificationService().initialize();
+  });
 
   runApp(const ProviderScope(child: PhytoLensApp()));
 }

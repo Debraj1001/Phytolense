@@ -12,6 +12,10 @@ class ScanResult {
   final String? remedy;
   final bool flagged;
   final DateTime scannedAt;
+  // ── XGBoost Severity Fields ──
+  final int severityPercent;       // 0-100 infection severity
+  final double infectionArea;      // 0.0-1.0 disease-to-leaf ratio
+  final String aiSource;           // 'cloud' | 'offline' | 'template'
 
   const ScanResult({
     required this.id,
@@ -25,6 +29,9 @@ class ScanResult {
     this.remedy,
     this.flagged = false,
     required this.scannedAt,
+    this.severityPercent = 0,
+    this.infectionArea = 0.0,
+    this.aiSource = 'cloud',
   });
 
   bool get isHealthy => diseaseName == 'Healthy' || healthScore >= 90;
@@ -38,6 +45,7 @@ class ScanResult {
   bool get isLowConfidence => diseaseConfidence < 0.45 && !isNonPlant;
   bool get isUnknownPlant =>
       (plantName == 'Unknown Plant' || isLowConfidence) && !isNonPlant;
+  bool get isOffline => aiSource == 'offline' || aiSource == 'template';
 
   String get statusLabel {
     if (healthScore >= 90) return 'Excellent';
@@ -65,6 +73,9 @@ class ScanResult {
     String? remedy,
     bool? flagged,
     DateTime? scannedAt,
+    int? severityPercent,
+    double? infectionArea,
+    String? aiSource,
   }) {
     return ScanResult(
       id: id ?? this.id,
@@ -78,6 +89,9 @@ class ScanResult {
       remedy: remedy ?? this.remedy,
       flagged: flagged ?? this.flagged,
       scannedAt: scannedAt ?? this.scannedAt,
+      severityPercent: severityPercent ?? this.severityPercent,
+      infectionArea: infectionArea ?? this.infectionArea,
+      aiSource: aiSource ?? this.aiSource,
     );
   }
 
@@ -94,6 +108,9 @@ class ScanResult {
         flagged: map['flagged'] ?? false,
         scannedAt: DateTime.tryParse(map['scanned_at']?.toString() ?? '') ??
             DateTime.now(),
+        severityPercent: map['severity_percent'] ?? 0,
+        infectionArea: (map['infection_area'] ?? 0.0).toDouble(),
+        aiSource: map['ai_source'] ?? 'cloud',
       );
 
   Map<String, dynamic> toMap({bool includeId = false}) {
@@ -107,6 +124,9 @@ class ScanResult {
       'remedy': remedy,
       'flagged': flagged,
       'scanned_at': scannedAt.toUtc().toIso8601String(),
+      'severity_percent': severityPercent,
+      'infection_area': infectionArea,
+      'ai_source': aiSource,
     };
     if (plantId != null && plantId!.isNotEmpty) {
       map['plant_id'] = plantId;

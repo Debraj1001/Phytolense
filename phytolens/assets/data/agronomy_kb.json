@@ -1,0 +1,58 @@
+{
+  "Healthy": {
+    "status": "Healthy",
+    "severity": "Low",
+    "action": "Maintain optimal watering and nutrient levels.",
+    "bio_remedy": "Apply Neem oil (5ml/L) monthly as a preventive measure.",
+    "chemical_remedy": "No chemical treatment required."
+  },
+  "Late blight": {
+    "status": "Infected",
+    "severity": "Critical",
+    "action": "Immediately remove and destroy infected leaves/plants. Do not compost.",
+    "bio_remedy": "Spray Trichoderma viride (5g/L) mixed with cow urine (10%) every 7 days.",
+    "chemical_remedy": "Apply Mancozeb 75% WP (2.5g/L) or Metalaxyl 8% + Mancozeb 64% WP (Ridomil Gold) (2g/L)."
+  },
+  "Early blight": {
+    "status": "Infected",
+    "severity": "High",
+    "action": "Ensure proper spacing for air circulation. Avoid overhead watering.",
+    "bio_remedy": "Apply Pseudomonas fluorescens (5g/L) at the base of the plant.",
+    "chemical_remedy": "Spray Chlorothalonil 75% WP (2g/L) or Propiconazole 25% EC (1ml/L)."
+  },
+  "Powdery mildew": {
+    "status": "Infected",
+    "severity": "Medium",
+    "action": "Improve air flow. Water at the base, keeping leaves dry.",
+    "bio_remedy": "Spray a solution of baking soda (1 tbsp) + liquid soap (1 tsp) per gallon of water.",
+    "chemical_remedy": "Apply Wettable Sulphur 80% WDG (2g/L) or Hexaconazole 5% SC (1ml/L)."
+  },
+  "Bacterial spot": {
+    "status": "Infected",
+    "severity": "High",
+    "action": "Avoid working in fields when wet. Remove infected plant debris.",
+    "bio_remedy": "Spray Copper Oxychloride 50% WP (3g/L) + Streptocycline (0.1g/L) every 10 days.",
+    "chemical_remedy": "Apply Copper Hydroxide 77% WP (2g/L) as a protectant spray."
+  },
+  "Tomato yellow leaf curl virus": {
+    "status": "Infected",
+    "severity": "Critical",
+    "action": "Remove and burn infected plants. Control whiteflies (the vector).",
+    "bio_remedy": "Install yellow sticky traps (10 per acre). Spray Neem oil (5ml/L).",
+    "chemical_remedy": "Spray Imidacloprid 17.8% SL (0.5ml/L) or Thiamethoxam 25% WG (0.5g/L) to control whiteflies."
+  },
+  "Spider mites two spotted spider mite": {
+    "status": "Infested",
+    "severity": "Medium",
+    "action": "Increase humidity around the plant if possible. Hose down plants with water.",
+    "bio_remedy": "Spray Neem oil (5ml/L) or release predatory mites (Phytoseiulus persimilis).",
+    "chemical_remedy": "Apply Abamectin 1.9% EC (0.5ml/L) or Spiromesifen 22.9% SC (1ml/L)."
+  },
+  "Unknown": {
+    "status": "Unknown",
+    "severity": "Unknown",
+    "action": "Monitor the plant closely for spreading symptoms. Check soil drainage.",
+    "bio_remedy": "Use a generic organic preventive like Neem oil (5ml/L).",
+    "chemical_remedy": "Consult a local agronomist before applying chemicals."
+  }
+}

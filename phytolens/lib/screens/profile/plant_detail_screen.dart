@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 import '../../models/plant.dart';
@@ -49,7 +49,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
 
   Future<void> _loadScans() async {
     setState(() => _isLoading = true);
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid == null) {
       if (mounted) setState(() => _isLoading = false);
       return;
@@ -129,7 +129,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
 
     try {
       final mlResult = await _ml.classifyImage(file);
-      final uid = FirebaseAuth.instance.currentUser!.uid;
+      final uid = Supabase.instance.client.auth.currentUser!.id;
 
       final scanResult = ScanResult(
         id: '',

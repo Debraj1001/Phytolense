@@ -6,6 +6,7 @@ class Env {
   static String get supabaseUrl => dotenv.env['SUPABASE_URL'] ?? '';
   static String get supabaseAnonKey => dotenv.env['SUPABASE_ANON_KEY'] ?? '';
   static String get supabaseServiceKey => dotenv.env['SUPABASE_SERVICE_KEY'] ?? '';
+  static String get razorpayKeyId => dotenv.env['RAZORPAY_KEY_ID'] ?? razorpayTestKeyId;
   static String get razorpayTestKeyId => dotenv.env['RAZORPAY_TEST_KEY_ID'] ?? '';
   static String get razorpayTestKeySecret => dotenv.env['RAZORPAY_TEST_KEY_SECRET'] ?? '';
   static String get groqApiKey => dotenv.env['GROQ_API_KEY'] ?? '';
