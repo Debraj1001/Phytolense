@@ -17,8 +17,7 @@
 [Architecture](#-system-architecture) •
 [Project Structure](#-project-structure) •
 [Getting Started](#-getting-started) •
-[Environment Configuration](#-environment-configuration) •
-[Admin Portal](#-admin-management-portal)
+[Environment Configuration](#-environment-configuration)
 
 </div>
 
@@ -120,20 +119,6 @@ Plant-life/
 │   │   └── widgets/             # Reusable cards, buttons, shimmers, badges
 │   ├── pubspec.yaml             # Mobile dependencies & assets
 │   └── .env.example             # Mobile environment variable template
-│
-└── phytolens_admin/             # 💻 Web & Desktop Admin Management Portal
-    ├── lib/
-    │   ├── models/              # Admin configurations, scan audit models
-    │   ├── providers/           # State management for admin controls
-    │   ├── screens/
-    │   │   ├── login/           # Secure PIN-based admin verification
-    │   │   ├── dashboard/       # Overview metrics, scan velocity, user count
-    │   │   ├── scans/           # Detailed scan audit log & filter
-    │   │   ├── users/           # User roster & quota management
-    │   │   └── config/          # Dynamic API toggles & global scan limits
-    │   └── services/            # Supabase administration client
-    ├── pubspec.yaml             # Admin portal dependencies
-    └── .env.example             # Admin environment variable template
 ```
 
 ---
@@ -160,14 +145,6 @@ Plant-life/
    cd phytolens
    cp .env.example .env
    # Populate your API keys in .env
-   flutter pub get
-   ```
-
-3. **Configure Admin Portal (`phytolens_admin`):**
-   ```bash
-   cd ../phytolens_admin
-   cp .env.example .env
-   # Add your Supabase credentials and Admin PIN in .env
    flutter pub get
    ```
 
@@ -211,12 +188,6 @@ GEMINI_API_KEY_5=AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```bash
 cd phytolens
 flutter run
-```
-
-### Running Admin Portal (Web / Desktop)
-```bash
-cd phytolens_admin
-flutter run -d chrome
 ```
 
 ---
