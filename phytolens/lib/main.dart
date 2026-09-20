@@ -80,36 +80,30 @@ class PhytoLensApp extends ConsumerWidget {
     final langService = ref.watch(languageProvider);
     final locale = Locale(langService.languageCode);
 
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 800),
-      switchInCurve: Curves.easeInOutCubic,
-      switchOutCurve: Curves.easeInOutCubic,
-      child: MaterialApp(
-        key: ValueKey(locale.languageCode),
-        title: 'PhytoLens',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        locale: locale,
-        supportedLocales: const [
-          Locale('en', 'US'),
-          Locale('hi', 'IN'),
-          Locale('bn', 'IN'),
-        ],
-        localizationsDelegates: const [
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        navigatorKey: appNavigatorKey,
-        initialRoute: AppConstants.routeSplash,
-        routes: {
-          AppConstants.routeSplash: (_) => const SplashScreen(),
-          AppConstants.routeOnboarding: (_) => const OnboardingScreen(),
-          AppConstants.routeLogin: (_) => const LoginScreen(),
-          AppConstants.routeHome: (_) => const HomeScreen(),
-        },
-        builder: (context, child) => AppGuard(child: child ?? const SizedBox.shrink()),
-      ),
+    return MaterialApp(
+      title: 'PhytoLens',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light,
+      locale: locale,
+      supportedLocales: const [
+        Locale('en', 'US'),
+        Locale('hi', 'IN'),
+        Locale('bn', 'IN'),
+      ],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      navigatorKey: appNavigatorKey,
+      initialRoute: AppConstants.routeSplash,
+      routes: {
+        AppConstants.routeSplash: (_) => const SplashScreen(),
+        AppConstants.routeOnboarding: (_) => const OnboardingScreen(),
+        AppConstants.routeLogin: (_) => const LoginScreen(),
+        AppConstants.routeHome: (_) => const HomeScreen(),
+      },
+      builder: (context, child) => AppGuard(child: child ?? const SizedBox.shrink()),
     );
   }
 }
