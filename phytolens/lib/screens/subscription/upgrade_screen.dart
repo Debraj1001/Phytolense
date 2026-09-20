@@ -2,17 +2,18 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:phytolens/screens/subscription/premium_transformation_screen.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:confetti/confetti.dart';
+import 'premium_transformation_screen.dart';
+import 'trial_activation_screen.dart';
 import '../../providers/app_config_provider.dart';
+import '../../providers/user_provider.dart';
 import '../../services/supabase_service.dart';
 import '../../services/payment_service.dart';
 import '../../services/trial_service.dart';
 import '../../theme/colors.dart';
 import '../../widgets/loading_dots.dart';
-import '../../providers/user_provider.dart';
 
 class UpgradeScreen extends ConsumerStatefulWidget {
   final bool isPro;
@@ -26,6 +27,7 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
   late final PaymentService _payment;
   late final ConfettiController _confetti;
   String? _processingPlan;
+  bool _featuresExpanded = false;
 
   @override
   void initState() {
@@ -83,7 +85,10 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
     _payment.setPlan(plan);
 
     final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      setState(() => _processingPlan = null);
+      return;
+    }
 
     final appUser = await SupabaseService().getUser(user.id);
     final email = appUser?.email ?? user.email ?? '';
@@ -110,20 +115,19 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Watch the live config — rebuilds whenever Supabase pushes an update
     final configAsync = ref.watch(appConfigProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundDark,
+      backgroundColor: const Color(0xFFF8FAF8),
       body: Stack(
         children: [
           configAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (_, __) => _buildBody(const AppConfig()),  // fallback defaults
-            data: (cfg) => _buildBody(cfg),
+            loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+            error: (_, __) => _buildContent(const AppConfig()),
+            data: (cfg) => _buildContent(cfg),
           ),
 
-          // Confetti
+          // Confetti overlay on purchase success
           Align(
             alignment: Alignment.topCenter,
             child: ConfettiWidget(
@@ -143,572 +147,256 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
     );
   }
 
-  Widget _buildBody(AppConfig cfg) {
-    return CustomScrollView(
-      slivers: [
-        // ── Hero App Bar ────────────────────────────────────────────────────
-        SliverAppBar(
-          expandedHeight: 220,
-          pinned: true,
-          backgroundColor: AppColors.backgroundDark,
-          leading: IconButton(
-            icon: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.4),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.close, size: 18, color: Colors.white),
-            ),
-            onPressed: () => Navigator.pop(context),
-          ),
-          flexibleSpace: FlexibleSpaceBar(
-            background: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xFF064E3B), Color(0xFF090D11)],
-                ),
-              ),
-              child: SafeArea(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const SizedBox(height: 20),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-                      ),
-                      child: const Icon(Icons.eco_rounded, color: AppColors.primaryLight, size: 38),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Upgrade PhytoLens',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'One-time payment · No auto-renewal',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Color(0xB3FFFFFF),
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
+  Widget _buildContent(AppConfig cfg) {
+    final liveUser = ref.watch(currentUserProvider).value;
+    final trialInfo = TrialService.getTrialInfo(liveUser, trialDays: cfg.trialDays);
 
-        SliverPadding(
-          padding: const EdgeInsets.all(20),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              // Billing notice
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.shield_outlined, color: AppColors.primaryLight, size: 20),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Pay once, use for 30 days. Renew manually when ready. No surprise charges.',
-                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
-                      ),
-                    ),
-                  ],
-                ),
-              ).animate().fadeIn(),
-
-              const SizedBox(height: 14),
-
-              // Trial countdown chip (for free users)
-              Builder(builder: (_) {
-                final liveUser = ref.watch(currentUserProvider).value;
-                final trialInfo = TrialService.getTrialInfo(
-                  liveUser,
-                  trialDays: cfg.trialDays,
-                );
-                return _buildTrialStatusCard(trialInfo, cfg);
-              }),
-
-              const SizedBox(height: 24),
-
-              // Live features comparison table
-              _buildFeaturesTable(cfg).animate(delay: 100.ms).fadeIn(),
-
-              const SizedBox(height: 24),
-
-              // Pro Plan Card (live limits + price)
-              if (!widget.isPro)
-                _buildPlanCard(
-                  plan: 'pro',
-                  title: 'Pro',
-                  emoji: '⚡',
-                  price: cfg.proPrice,
-                  period: '30 days',
-                  tagline: 'Perfect for home gardeners',
-                  accentColor: const Color(0xFF00BCD4),
-                  features: [
-                    ('${cfg.proScanLabel} scans', true),
-                    ('${cfg.proAiLabel} AI chats', true),
-                    ('Detailed disease reports', true),
-                    ('Analytics & scan history', true),
-                    ('Priority support', true),
-                  ],
-                ).animate(delay: 200.ms).fadeIn().slideY(begin: 0.1, end: 0),
-
-              if (!widget.isPro) const SizedBox(height: 14),
-
-              // Farm Pack Card (live limits + price)
-              _buildPlanCard(
-                plan: 'farm',
-                title: 'Farm Pack',
-                emoji: '🌾',
-                price: cfg.farmPrice,
-                period: '30 days',
-                tagline: 'For serious farmers & professionals',
-                accentColor: const Color(0xFFFFD700),
-                isBestValue: true,
-                features: [
-                  ('${cfg.farmScanLabel} scans', true),
-                  ('${cfg.farmAiLabel} AI chats', true),
-                  ('Full disease reports', true),
-                  ('Multi-plant garden tracking', cfg.gardenEnabled),
-                  ('Bulk export & reports', cfg.bulkExportEnabled),
-                  ('Beta features access', true),
-                ],
-              ).animate(delay: 300.ms).fadeIn().slideY(begin: 0.1, end: 0),
-
-              const SizedBox(height: 24),
-
-              // Trust badges
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _TrustBadge(icon: Icons.lock_outline, label: 'Secure\nPayment'),
-                  const SizedBox(width: 20),
-                  _TrustBadge(icon: Icons.refresh_rounded, label: 'No Auto\nRenewal'),
-                  const SizedBox(width: 20),
-                  _TrustBadge(icon: Icons.support_agent_rounded, label: '24/7\nSupport'),
-                ],
-              ).animate(delay: 400.ms).fadeIn(),
-
-              const SizedBox(height: 12),
-              const Center(
-                child: Text(
-                  'Powered by Razorpay · Test mode active',
-                  style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // What happens after trial? FAQ
-              _buildTrialFaq(cfg).animate(delay: 500.ms).fadeIn(),
-
-              const SizedBox(height: 40),
-            ]),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPlanCard({
-    required String plan,
-    required String title,
-    required String emoji,
-    required String price,
-    required String period,
-    required String tagline,
-    required Color accentColor,
-    required List<(String, bool)> features,
-    bool isBestValue = false,
-  }) {
-    final isProcessing = _processingPlan == plan;
-    return Stack(
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: AppColors.cardDark,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: accentColor.withValues(alpha: 0.4), width: 1.5),
-            boxShadow: [
-              BoxShadow(
-                color: accentColor.withValues(alpha: 0.08),
-                blurRadius: 20,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: accentColor.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(emoji, style: const TextStyle(fontSize: 22)),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: accentColor,
-                          ),
-                        ),
-                        Text(
-                          tagline,
-                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        price,
-                        style: const TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      Text(
-                        'for $period',
-                        style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-              const Divider(color: Color(0x1A8FA98D), height: 1),
-              const SizedBox(height: 14),
-
-              // Features
-              ...features.map((f) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 18,
-                          height: 18,
-                          decoration: BoxDecoration(
-                            color: f.$2
-                                ? accentColor.withValues(alpha: 0.15)
-                                : AppColors.textMuted.withValues(alpha: 0.1),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            f.$2 ? Icons.check : Icons.remove,
-                            size: 11,
-                            color: f.$2 ? accentColor : AppColors.textMuted,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          f.$1,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: f.$2 ? AppColors.textSecondary : AppColors.textMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )),
-
-              const SizedBox(height: 18),
-
-              // CTA
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: isProcessing ? null : () => _subscribe(plan),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: accentColor,
-                    minimumSize: const Size(double.infinity, 48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9999)),
-                  ),
-                  child: isProcessing
-                      ? ButtonDots(color: accentColor.computeLuminance() > 0.45 ? const Color(0xFF1A1200) : Colors.white)
-                      : Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              'Get $title for $price',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15,
-                                color: accentColor.computeLuminance() > 0.45 ? const Color(0xFF1A1200) : Colors.white,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Icon(
-                              Icons.arrow_forward_rounded,
-                              size: 16,
-                              color: accentColor.computeLuminance() > 0.45 ? const Color(0xFF1A1200) : Colors.white,
-                            ),
-                          ],
-                        ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (isBestValue)
-          Positioned(
-            top: -1,
-            right: 20,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-              decoration: const BoxDecoration(
-                color: Color(0xFFFFD700),
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(10)),
-              ),
-              child: const Text(
-                'BEST VALUE',
-                style: TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF1A1200),
-                  letterSpacing: 1,
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildTrialStatusCard(TrialInfo trialInfo, AppConfig cfg) {
-    final isExpired = trialInfo.isExpired;
-    final accentColor = isExpired ? AppColors.error : AppColors.primary;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: accentColor.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: accentColor.withValues(alpha: 0.25)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: accentColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text('🌱', style: const TextStyle(fontSize: 18)),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Free Plan',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: accentColor,
-                      ),
-                    ),
-                    Text(
-                      isExpired
-                          ? 'Trial ended · Upgrade to Pro or Farm Pack to continue'
-                          : 'Pro Trial · ${trialInfo.shortLabel}',
-                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-              Text(
-                isExpired ? 'EXPIRED' : 'TRIAL',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: accentColor,
-                ),
-              ),
-            ],
-          ),
-          if (!isExpired) ...[
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: trialInfo.progressFraction,
-                backgroundColor: accentColor.withValues(alpha: 0.12),
-                valueColor: AlwaysStoppedAnimation<Color>(accentColor),
-                minHeight: 4,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Day ${trialInfo.totalDays - trialInfo.remainingDays} of ${trialInfo.totalDays}',
-                  style: TextStyle(fontSize: 10, color: accentColor.withValues(alpha: 0.6)),
-                ),
-                Text(
-                  '${trialInfo.remainingDays} days remaining',
-                  style: TextStyle(fontSize: 10, color: accentColor.withValues(alpha: 0.6)),
-                ),
-              ],
-            ),
-          ],
-          const SizedBox(height: 12),
-          const Divider(color: Color(0x1A8FA98D), height: 1),
-          const SizedBox(height: 10),
-          // Current limits
-          ...(isExpired
-              ? ['Trial ended (0 scans/chats left)', 'Upgrade below for instant access', 'Past scan history preserved forever']
-              : ['${cfg.proScanLabel} scans (Tier 1 Pro benefits)', '${cfg.proAiLabel} AI chats (Tier 1 Pro benefits)', 'Detailed disease diagnosis reports']).map(
-            (f) => Padding(
-              padding: const EdgeInsets.only(bottom: 6),
+    return SafeArea(
+      child: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          // ── Clean Top Navigation Bar ──────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: Row(
                 children: [
-                  Container(
-                    width: 16,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      color: isExpired
-                          ? AppColors.error.withValues(alpha: 0.15)
-                          : AppColors.primary.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      isExpired ? Icons.close_rounded : Icons.check_rounded,
-                      size: 10,
-                      color: isExpired ? AppColors.error : AppColors.primary,
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF374151)),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Text(f, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFECFDF5),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFFA7F3D0)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.shield_outlined, size: 14, color: AppColors.primary),
+                        SizedBox(width: 5),
+                        Text(
+                          'No Auto-Debit',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primaryDark,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
           ),
-        ],
-      ),
-    ).animate().fadeIn().slideY(begin: 0.05, end: 0);
-  }
 
-  Widget _buildTrialFaq(AppConfig cfg) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.textMuted.withValues(alpha: 0.1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.help_outline_rounded, color: AppColors.textSecondary, size: 18),
-              SizedBox(width: 8),
-              Text(
-                'What happens after the trial?',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
+          // ── Header Title ──────────────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              child: Column(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD1FAE5),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFFA7F3D0), width: 1.5),
+                    ),
+                    child: const Center(
+                      child: Text('🌱', style: TextStyle(fontSize: 26)),
+                    ),
+                  ).animate().scale(duration: 350.ms, curve: Curves.easeOutBack),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Upgrade PhytoLens',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF111827),
+                      letterSpacing: -0.4,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Simple one-time payment · 30 days access · Zero surprises',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF6B7280),
+                      height: 1.3,
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-          const SizedBox(height: 12),
-          _faqItem(
-            '📱',
-            'What happens when the trial ends?',
-            'When your trial concludes, scanning and AI chats require an active plan. Upgrade to Pro (${cfg.proPrice}/month) or Farm Pack (${cfg.farmPrice}/month) below. All your past scan history and saved records remain safely preserved.',
-          ),
-          _faqItem(
-            '💰',
-            'Will I be charged automatically?',
-            'Never. All upgrades are one-time payments for 30 days. No auto-renewal, no surprise charges.',
-          ),
-          _faqItem(
-            '📊',
-            'What about my scan history?',
-            'All your scans, reports, and data are kept forever, regardless of your plan.',
+
+          // ── Main Content Body ─────────────────────────────────────────────
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                // 1. ₹1 Trial Opportunity Banner (if not yet started)
+                if (trialInfo.isNotStarted)
+                  _buildTrialOfferCard(cfg).animate().fadeIn(duration: 300.ms).slideY(begin: 0.05, end: 0)
+                else if (trialInfo.isActive)
+                  _buildActiveTrialPill(trialInfo, cfg).animate().fadeIn(duration: 300.ms)
+                else if (trialInfo.isExpired)
+                  _buildExpiredTrialNotice().animate().fadeIn(duration: 300.ms),
+
+                const SizedBox(height: 16),
+
+                // 2. Pro Plan Card
+                _buildPlanCard(
+                  plan: 'pro',
+                  badge: '⚡ MOST POPULAR',
+                  badgeColor: const Color(0xFF0284C7),
+                  badgeBg: const Color(0xFFE0F2FE),
+                  title: 'Pro Plan',
+                  subtitle: 'Ideal for home gardens & hobby growers',
+                  price: cfg.proPrice,
+                  period: '30 days',
+                  accentColor: const Color(0xFF0284C7),
+                  features: [
+                    '${cfg.proScanLabel} Leaf Scans',
+                    '${cfg.proAiLabel} AI Plant Doctor Chats',
+                    'Detailed Disease & Remedy Reports',
+                    'Health Analytics & History',
+                  ],
+                ).animate().fadeIn(delay: 100.ms, duration: 350.ms).slideY(begin: 0.05, end: 0),
+
+                const SizedBox(height: 16),
+
+                // 3. Farm Pack Card
+                _buildPlanCard(
+                  plan: 'farm',
+                  badge: '🌾 MAXIMUM POWER',
+                  badgeColor: const Color(0xFFB45309),
+                  badgeBg: const Color(0xFFFEF3C7),
+                  title: 'Farm Pack',
+                  subtitle: 'For serious farmers, agronomists & plots',
+                  price: cfg.farmPrice,
+                  period: '30 days',
+                  accentColor: const Color(0xFFD97706),
+                  isHighlighted: true,
+                  features: [
+                    '${cfg.farmScanLabel} Leaf Scans',
+                    '${cfg.farmAiLabel} AI Plant Doctor Chats',
+                    'Multi-plant Garden & Plot Tracking',
+                    'Bulk Export & PDF Agronomy Reports',
+                    'Priority Leaf Diagnostics Engine',
+                  ],
+                ).animate().fadeIn(delay: 200.ms, duration: 350.ms).slideY(begin: 0.05, end: 0),
+
+                const SizedBox(height: 20),
+
+                // 4. Clean Feature Comparison Expandable
+                _buildExpandableComparison(cfg),
+
+                const SizedBox(height: 24),
+
+                // 5. Peace of Mind Guarantees
+                _buildTrustRow(),
+
+                const SizedBox(height: 32),
+              ]),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _faqItem(String emoji, String question, String answer) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+  // ── Quick Trial Promo Card ────────────────────────────────────────────────
+  Widget _buildTrialOfferCard(AppConfig cfg) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFECFDF5), Color(0xFFF0FDF4)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFA7F3D0), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF059669).withValues(alpha: 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 16)),
-          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFA7F3D0)),
+            ),
+            child: const Icon(Icons.bolt_rounded, color: Color(0xFF059669), size: 24),
+          ),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  question,
+                  'Try Pro for ₹${cfg.trialPrice.toInt()} (${cfg.trialDays} Days)',
                   style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF065F46),
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  answer,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textMuted,
-                    height: 1.4,
-                  ),
+                  'Unlock ${cfg.proScanLabel} scans & AI doctor chats instantly',
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF047857)),
                 ),
               ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const TrialActivationScreen()),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF059669),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 0,
+            ),
+            child: const Text(
+              'Activate',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
             ),
           ),
         ],
@@ -716,55 +404,345 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
     );
   }
 
-  /// Live comparison table — values come from AppConfig
-  Widget _buildFeaturesTable(AppConfig cfg) {
-    final rows = [
-      ('Daily Scans', cfg.freeScanLabel, cfg.proScanLabel, cfg.farmScanLabel),
-      ('AI Chats',   cfg.freeAiLabel,   cfg.proAiLabel,   cfg.farmAiLabel),
-      ('Disease Reports', 'Basic', 'Detailed', 'Full'),
-      ('Analytics', '✗', '✓', '✓'),
-      ('Garden Tracking', '✗', '✗', cfg.gardenEnabled ? '✓' : '✗'),
-    ];
-
+  Widget _buildActiveTrialPill(TrialInfo trialInfo, AppConfig cfg) {
     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.cardDark,
+        color: const Color(0xFFEFF6FF),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.textMuted.withValues(alpha: 0.1)),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
       ),
-      child: Column(
+      child: Row(
         children: [
-          // Header row
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            decoration: const BoxDecoration(
-              color: AppColors.lightCard,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-            ),
-            child: const Row(
-              children: [
-                Expanded(flex: 2, child: Text('Feature', style: TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w600))),
-                Expanded(child: Center(child: Text('Free', style: TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w600)))),
-                Expanded(child: Center(child: Text('Pro ⚡', style: TextStyle(fontSize: 11, color: Color(0xFF00BCD4), fontWeight: FontWeight.w700)))),
-                Expanded(child: Center(child: Text('Farm 🌾', style: TextStyle(fontSize: 11, color: Color(0xFFFFD700), fontWeight: FontWeight.w700)))),
-              ],
+          const Icon(Icons.check_circle_rounded, color: Color(0xFF2563EB), size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Pro Trial Active · ${trialInfo.remainingDays} day${trialInfo.remainingDays == 1 ? "" : "s"} remaining',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1E40AF),
+              ),
             ),
           ),
-          // Data rows
-          ...rows.map((r) => Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          const Text(
+            'Day of 2',
+            style: TextStyle(fontSize: 12, color: Color(0xFF3B82F6), fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExpiredTrialNotice() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFECACA)),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.access_time_rounded, color: Color(0xFFDC2626), size: 20),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Your trial has ended. Select a plan below to keep high limits.',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF991B1B),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Plan Card ─────────────────────────────────────────────────────────────
+  Widget _buildPlanCard({
+    required String plan,
+    required String badge,
+    required Color badgeColor,
+    required Color badgeBg,
+    required String title,
+    required String subtitle,
+    required String price,
+    required String period,
+    required Color accentColor,
+    required List<String> features,
+    bool isHighlighted = false,
+  }) {
+    final isProcessing = _processingPlan == plan;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isHighlighted ? const Color(0xFFF59E0B) : const Color(0xFFE2E8F0),
+          width: isHighlighted ? 1.8 : 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: (isHighlighted ? const Color(0xFFD97706) : Colors.black).withValues(alpha: 0.05),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Top Row: Badge & Period
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.05))),
+                  color: badgeBg,
+                  borderRadius: BorderRadius.circular(8),
                 ),
+                child: Text(
+                  badge,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: badgeColor,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              Text(
+                'One-time · $period',
+                style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280), fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Price & Title
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                price,
+                style: const TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF111827),
+                  letterSpacing: -1,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF374151),
+                ),
+              ),
+            ],
+          ),
+
+          Text(
+            subtitle,
+            style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+          ),
+
+          const SizedBox(height: 16),
+          const Divider(color: Color(0xFFF1F5F9), height: 1),
+          const SizedBox(height: 14),
+
+          // Feature list
+          ...features.map((f) => Padding(
+                padding: const EdgeInsets.only(bottom: 9),
                 child: Row(
                   children: [
-                    Expanded(flex: 2, child: Text(r.$1, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
-                    Expanded(child: Center(child: Text(r.$2, style: const TextStyle(fontSize: 12, color: AppColors.textMuted)))),
-                    Expanded(child: Center(child: Text(r.$3, style: const TextStyle(fontSize: 12, color: Color(0xFF00BCD4), fontWeight: FontWeight.w600)))),
-                    Expanded(child: Center(child: Text(r.$4, style: const TextStyle(fontSize: 12, color: Color(0xFFFFD700), fontWeight: FontWeight.w600)))),
+                    Container(
+                      width: 18,
+                      height: 18,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD1FAE5),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: const Color(0xFFA7F3D0)),
+                      ),
+                      child: const Icon(Icons.check_rounded, size: 12, color: Color(0xFF059669)),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        f,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF374151),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               )),
+
+          const SizedBox(height: 16),
+
+          // Action Button
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              onPressed: isProcessing ? null : () => _subscribe(plan),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isHighlighted ? const Color(0xFFD97706) : const Color(0xFF0284C7),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+              child: isProcessing
+                  ? const ButtonDots(color: Colors.white)
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Get $title — $price',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.arrow_forward_rounded, size: 18),
+                      ],
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Expandable Comparison ─────────────────────────────────────────────────
+  Widget _buildExpandableComparison(AppConfig cfg) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: _featuresExpanded,
+          onExpansionChanged: (v) => setState(() => _featuresExpanded = v),
+          title: const Text(
+            'Compare all plans side-by-side',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1F2937),
+            ),
+          ),
+          leading: const Icon(Icons.table_chart_outlined, color: Color(0xFF4B5563), size: 20),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Table(
+                columnWidths: const {
+                  0: FlexColumnWidth(2.2),
+                  1: FlexColumnWidth(1.2),
+                  2: FlexColumnWidth(1.2),
+                  3: FlexColumnWidth(1.2),
+                },
+                children: [
+                  // Table Header
+                  const TableRow(
+                    decoration: BoxDecoration(
+                      border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1.5)),
+                    ),
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Text('Feature', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF6B7280))),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Center(child: Text('Free', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF6B7280)))),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Center(child: Text('Pro ⚡', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0284C7)))),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Center(child: Text('Farm 🌾', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFD97706)))),
+                      ),
+                    ],
+                  ),
+                  _comparisonRow('Daily Scans', cfg.freeScanLabel, cfg.proScanLabel, cfg.farmScanLabel),
+                  _comparisonRow('AI Chats', cfg.freeAiLabel, cfg.proAiLabel, cfg.farmAiLabel),
+                  _comparisonRow('Disease Reports', 'Basic', 'Detailed', 'Full'),
+                  _comparisonRow('Farm Limits', '${cfg.farmCreationLimitFree}', '${cfg.farmCreationLimitPro}', '${cfg.farmCreationLimitFarm}'),
+                  _comparisonRow('Garden Tracking', '✗', '✗', cfg.gardenEnabled ? '✓' : '✗'),
+                  _comparisonRow('PDF Bulk Export', '✗', '✓', cfg.bulkExportEnabled ? '✓' : '✗'),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  TableRow _comparisonRow(String feature, String free, String pro, String farm) {
+    return TableRow(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9), width: 1)),
+      ),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(feature, style: const TextStyle(fontSize: 12, color: Color(0xFF374151), fontWeight: FontWeight.w500)),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Center(child: Text(free, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)))),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Center(child: Text(pro, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF0284C7)))),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Center(child: Text(farm, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFD97706)))),
+        ),
+      ],
+    );
+  }
+
+  // ── Peace of Mind Trust Row ───────────────────────────────────────────────
+  Widget _buildTrustRow() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _TrustItem(icon: Icons.lock_outline_rounded, label: 'Razorpay\nSecure'),
+          _TrustItem(icon: Icons.replay_rounded, label: 'No Auto\nRenewal'),
+          _TrustItem(icon: Icons.history_rounded, label: 'Lifetime\nData Safe'),
         ],
       ),
     );
@@ -778,29 +756,25 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
   }
 }
 
-class _TrustBadge extends StatelessWidget {
+class _TrustItem extends StatelessWidget {
   final IconData icon;
   final String label;
-  const _TrustBadge({required this.icon, required this.label});
+  const _TrustItem({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Row(
       children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: AppColors.cardDark,
-            shape: BoxShape.circle,
-            border: Border.all(color: AppColors.textMuted.withValues(alpha: 0.15)),
-          ),
-          child: Icon(icon, color: AppColors.primaryLight, size: 20),
-        ),
-        const SizedBox(height: 6),
+        Icon(icon, size: 18, color: const Color(0xFF059669)),
+        const SizedBox(width: 8),
         Text(
           label,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 10, color: AppColors.textMuted, height: 1.3),
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF4B5563),
+            height: 1.2,
+          ),
         ),
       ],
     );
