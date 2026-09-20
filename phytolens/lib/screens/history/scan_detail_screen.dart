@@ -12,6 +12,7 @@ import '../../theme/design_tokens.dart';
 import '../../widgets/health_score_ring.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/user_provider.dart';
+import '../../providers/language_provider.dart';
 import '../../providers/app_config_provider.dart';
 import '../../services/trial_service.dart';
 import '../subscription/upgrade_screen.dart';
@@ -248,8 +249,8 @@ class _ScanDetailScreenState extends ConsumerState<ScanDetailScreen> {
                 child: const Icon(Icons.smart_toy_outlined, color: AppColors.secondary, size: 20),
               ),
               const SizedBox(width: 10),
-              const Text(
-                'AI Diagnosis & Health Summary',
+              Text(
+                ref.tr('ai_diagnosis_summary'),
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
@@ -300,7 +301,7 @@ class _ScanDetailScreenState extends ConsumerState<ScanDetailScreen> {
         Expanded(
           child: OutlinedButton.icon(
             icon: Icon(isLocked ? Icons.lock_outline_rounded : Icons.chat_bubble_outline, size: 18),
-            label: Text(isLocked ? 'Ask AI (Locked)' : 'Ask AI'),
+            label: Text(isLocked ? ref.tr('ask_ai_locked') : ref.tr('ask_ai')),
             onPressed: () {
               if (isLocked) {
                 Navigator.push(
@@ -330,7 +331,7 @@ class _ScanDetailScreenState extends ConsumerState<ScanDetailScreen> {
         Expanded(
           child: FilledButton.icon(
             icon: const Icon(Icons.share_outlined, size: 18),
-            label: const Text('Share'),
+            label: Text(ref.tr('share_result')),
             onPressed: () {
               final text = 'I scanned a ${widget.scan.plantName} with PhytoLens! 🌱\n\n'
                   'Result: ${widget.scan.diseaseName}\n'

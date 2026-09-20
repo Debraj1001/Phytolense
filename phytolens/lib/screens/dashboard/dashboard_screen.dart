@@ -23,6 +23,7 @@ import '../../providers/scan_limit_provider.dart';
 import '../../providers/ai_limit_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/app_config_provider.dart';
+import '../../providers/language_provider.dart';
 import '../home/home_screen.dart';
 import '../history/scan_detail_screen.dart';
 import '../ai/chatbot_screen.dart';
@@ -35,6 +36,7 @@ import '../../widgets/bouncing_button.dart';
 import '../../widgets/emergency_doctor_pass_sheet.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/glass_button.dart';
+import '../../widgets/language_selector_sheet.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -54,7 +56,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Map<String, dynamic> _stats = {};
   List<ScanResult> _recentScans = [];
   SprayWindow? _sprayWindow;
-  String _outbreakMessage = 'Checking for nearby outbreaks...';
+  String _outbreakMessage = 'checking_outbreaks';
 
   StreamSubscription? _userSub;
   StreamSubscription? _scansSub;
@@ -70,6 +72,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     _userSub?.cancel();
     _scansSub?.cancel();
     super.dispose();
+  }
+
+  String _getGreeting(WidgetRef ref) {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return ref.tr('good_morning');
+    if (hour < 17) return ref.tr('good_afternoon');
+    return ref.tr('good_evening');
   }
 
   void _load() async {
@@ -175,13 +184,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       if (mounted) {
         if (response.isNotEmpty) {
           final count = response.length;
-          final disease = response[0]['disease_name'] ?? 'unknown disease';
+          final disease = response[0]['disease_name'] ?? 'unknown_disease';
           setState(() {
-            _outbreakMessage = '$count recent cases of $disease reported within 10km.';
+            _outbreakMessage = 'outbreak_count|$count|$disease';
           });
         } else {
           setState(() {
-            _outbreakMessage = 'No major outbreaks reported nearby.';
+            _outbreakMessage = 'no_outbreaks';
           });
         }
       }
@@ -189,7 +198,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       debugPrint('Error fetching outbreaks: $e');
       if (mounted) {
         setState(() {
-          _outbreakMessage = 'Outbreak radar unavailable offline.';
+          _outbreakMessage = 'radar_unavailable';
         });
       }
     }
@@ -202,7 +211,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final aiLimit = ref.watch(aiLimitProvider).value;
     final config = ref.watch(appConfigProvider).value;
 
-    final displayName = liveUser?.displayName ?? 'Plant Lover';
+    final displayName = liveUser?.displayName ?? ref.tr('plant_lover');
     final firstName = displayName.split(' ').first;
 
     final totalScans = _stats['total'] as int? ?? liveUser?.scanCount ?? 0;
@@ -290,7 +299,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Hello, $firstName 👋',
+                      '${_getGreeting(ref)}, $firstName 👋',
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 22,
                         fontWeight: FontWeight.w800,
@@ -301,8 +310,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     const SizedBox(height: 3),
                     Text(
                       diseaseCount > 0
-                          ? '$diseaseCount plant${diseaseCount > 1 ? 's' : ''} require attention'
-                          : 'All plants look healthy today',
+                          ? ref.tr('plants_require_attention').replaceAll('{count}', diseaseCount.toString())
+                          : ref.tr('all_plants_healthy'),
                       style: GoogleFonts.inter(
                         fontSize: 13,
                         color: diseaseCount > 0 ? AppColors.warning : AppColors.lightTextSecondary,
@@ -310,6 +319,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ),
                     ),
                   ],
+                ),
+                IconButton(
+                  icon: const Icon(Icons.language, color: AppColors.lightTextPrimary),
+                  onPressed: () => LanguageSelectorSheet.show(context, ref),
                 ),
               ],
             ),
@@ -335,7 +348,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 Expanded(
                   flex: 3,
                   child: GlassButton.action(
-                    label: 'Scan Plant Leaf',
+                    label: ref.tr('scan_now'),
                     icon: Icons.camera_alt_rounded,
                     style: GlassButtonStyle.emerald,
                     onTap: () {
@@ -368,7 +381,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 Expanded(
                   flex: 2,
                   child: GlassButton.action(
-                    label: 'AI Doctor',
+                    label: ref.tr('ai_specialist'),
                     icon: Icons.auto_awesome_rounded,
                     style: GlassButtonStyle.adaptive,
                     accentColor: AppColors.primary,
@@ -402,7 +415,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               children: [
                 Expanded(
                   child: GlassButton.action(
-                    label: 'Nearby Retailers (B2B)',
+                    label: ref.tr('nearby_retailers'),
                     icon: Icons.storefront_rounded,
                     style: GlassButtonStyle.light,
                     accentColor: AppColors.primaryDark,
@@ -466,7 +479,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           Row(
                             children: [
                               Text(
-                                'Community Radar',
+                                ref.tr('community_radar'),
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w700,
@@ -481,8 +494,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                     color: AppColors.error.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
-                                  child: const Text(
-                                    'LOCKED',
+                                  child: Text(ref.tr('locked_caps'),
                                     style: TextStyle(
                                       fontSize: 9,
                                       fontWeight: FontWeight.w800,
@@ -496,8 +508,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           const SizedBox(height: 2),
                           Text(
                             isAccessLocked
-                                ? 'Local outbreak detection locked. Upgrade to Pro/Farm to track nearby crop disease outbreaks.'
-                                : _outbreakMessage,
+                                ? ref.tr('radar_locked_msg')
+                                : _outbreakMessage.startsWith('outbreak_count|')
+                                    ? ref.tr('outbreak_count').replaceAll('{count}', _outbreakMessage.split('|')[1]).replaceAll('{disease}', _outbreakMessage.split('|')[2] == 'unknown_disease' ? ref.tr('unknown_disease') : _outbreakMessage.split('|')[2])
+                                    : ref.tr(_outbreakMessage),
                             style: TextStyle(
                               fontSize: 12,
                               color: isAccessLocked ? const Color(0xFF64748B) : const Color(0xFFC2410C),
@@ -538,12 +552,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       child: const Icon(Icons.support_agent_rounded, color: Colors.white, size: 20),
                     ),
                     const SizedBox(width: 12),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Emergency Doctor Pass',
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [ Text(ref.tr('emergency_doctor_pass'),
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
@@ -552,7 +561,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           ),
                           SizedBox(height: 2),
                           Text(
-                            'Get 1-on-1 expert help now for ₹10',
+                            ref.tr('emergency_doctor_msg'),
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.white70,
@@ -586,12 +595,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       child: const Icon(Icons.lock_clock_rounded, color: AppColors.error, size: 20),
                     ),
                     const SizedBox(width: 12),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Spray Window & Climate Advisory',
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [ Text(ref.tr('spray_window_advisory'),
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
@@ -600,7 +604,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           ),
                           SizedBox(height: 2),
                           Text(
-                            'Locked · Upgrade to Pro or Farm to view optimal chemical/organic spray timing',
+                            ref.tr('spray_locked_msg'),
                             style: TextStyle(
                               fontSize: 12,
                               color: AppColors.lightTextSecondary,
@@ -620,7 +624,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
-                      child: const Text('Unlock', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                      child: Text(ref.tr('unlock'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
                     ),
                   ],
                 ),
@@ -658,7 +662,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 ),
                               ),
                               Text(
-                                'Feels like ${_sprayWindow!.current.feelsLike.toStringAsFixed(1)}°C',
+                                ref.tr('feels_like').replaceAll('{temp}', _sprayWindow!.current.feelsLike.toStringAsFixed(1)),
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: AppColors.lightTextSecondary,
@@ -702,7 +706,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            'Spray Window: ${_sprayWindow!.isOptimal ? "Optimal ✓" : "Not Ideal"}',
+                            '${ref.tr("spray_window_status")}: ${_sprayWindow!.isOptimal ? "${ref.tr("optimal")} ✓" : ref.tr("not_ideal")}',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
@@ -724,7 +728,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(
-                          "Next best time: ${_sprayWindow!.nextBestTime}",
+                          "${ref.tr('next_best_time')}: ${_sprayWindow!.nextBestTime}",
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -751,8 +755,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Recent Diagnoses',
+                Text(ref.tr('recent_diagnoses'),
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -772,8 +775,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ref.read(navIndexProvider.notifier).state = 2;
                       }
                     },
-                    child: const Text(
-                      'View all',
+                    child: Text(ref.tr('view_all'),
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -816,8 +818,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       child: const Icon(Icons.eco_outlined, color: AppColors.primary, size: 28),
                     ),
                     const SizedBox(height: 12),
-                    const Text(
-                      'No plant scans yet',
+                    Text(ref.tr('no_scans_yet'),
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -825,8 +826,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    const Text(
-                      'Point your camera at any leaf to diagnose diseases and get instant remedies.',
+                    Text(ref.tr('no_scans_subtitle'),
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 12,
@@ -873,22 +873,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     if (scanLimit == null) {
       scanRemainingStr = '--';
     } else if (isExpired) {
-      scanRemainingStr = 'Trial Ended';
+      scanRemainingStr = ref.tr('trial_ended');
     } else if (scanLimit.isUnlimited) {
-      scanRemainingStr = 'Unlimited';
+      scanRemainingStr = ref.tr('unlimited');
     } else {
-      scanRemainingStr = '${scanLimit.remaining}/${scanLimit.limit} left';
+      scanRemainingStr = ref.tr('quota_left').replaceAll('{remaining}', scanLimit.remaining.toString()).replaceAll('{limit}', scanLimit.limit.toString());
     }
 
     final String aiRemainingStr;
     if (aiLimit == null) {
       aiRemainingStr = '--';
     } else if (isExpired) {
-      aiRemainingStr = 'Trial Ended';
+      aiRemainingStr = ref.tr('trial_ended');
     } else if (aiLimit.isUnlimited) {
-      aiRemainingStr = 'Unlimited';
+      aiRemainingStr = ref.tr('unlimited');
     } else {
-      aiRemainingStr = '${aiLimit.remaining}/${aiLimit.limit} left';
+      aiRemainingStr = ref.tr('quota_left').replaceAll('{remaining}', aiLimit.remaining.toString()).replaceAll('{limit}', aiLimit.limit.toString());
     }
 
     final cfg = ref.watch(appConfigProvider).value ?? const AppConfig();
@@ -898,23 +898,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final Color badgeColor;
     final Color badgeBg;
     if (isFarm) {
-      badgeLabel = '🌾 FARM TIER';
+      badgeLabel = ref.tr('farm_tier_badge');
       badgeColor = const Color(0xFF92400E);
       badgeBg = const Color(0xFFFEF3C7);
     } else if (isPro) {
-      badgeLabel = '⚡ PRO TIER';
+      badgeLabel = ref.tr('pro_tier_badge');
       badgeColor = const Color(0xFF0369A1);
       badgeBg = const Color(0xFFE0F2FE);
     } else if (isExpired) {
-      badgeLabel = '🥀 TRIAL ENDED — UPGRADE';
+      badgeLabel = ref.tr('trial_ended_badge');
       badgeColor = AppColors.error;
       badgeBg = const Color(0xFFFEE2E2);
     } else if (isNotStarted) {
-      badgeLabel = '🌱 ${cfg.trialDays}-DAY TRIAL';
+      badgeLabel = ref.tr('trial_start_badge').replaceAll('{days}', cfg.trialDays.toString());
       badgeColor = AppColors.primaryDark;
       badgeBg = const Color(0xFFD1FAE5);
     } else {
-      badgeLabel = '🌱 ${trialInfo.remainingDays}D TRIAL ACTIVE';
+      badgeLabel = ref.tr('trial_active_badge').replaceAll('{days}', trialInfo.remainingDays.toString());
       badgeColor = AppColors.primaryDark;
       badgeBg = const Color(0xFFD1FAE5);
     }
@@ -922,13 +922,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final String actionText;
     final VoidCallback onActionTap;
     if (isNotStarted) {
-      actionText = 'Start Trial';
+      actionText = ref.tr('start_free_trial');
       onActionTap = () => Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const TrialActivationScreen()),
       );
     } else if (isFarm || isPro) {
-      actionText = 'Manage';
+      actionText = ref.tr('manage');
       onActionTap = () => Navigator.push(
         context,
         MaterialPageRoute(
@@ -938,7 +938,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ),
       );
     } else {
-      actionText = 'Upgrade';
+      actionText = ref.tr('upgrade');
       onActionTap = () => Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const UpgradeScreen()),
@@ -978,7 +978,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   if (trialInfo.isActive && !isPro && !isFarm) ...[
                     const SizedBox(width: 8),
                     Text(
-                      '${trialInfo.remainingDays}d left',
+                      ref.tr('days_left').replaceAll('{days}', trialInfo.remainingDays.toString()),
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -1047,8 +1047,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Leaf Scans',
+                          Text(ref.tr('leaf_scans'),
                             style: TextStyle(
                               fontSize: 11,
                               color: AppColors.lightTextMuted,
@@ -1089,8 +1088,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'AI Consults',
+                          Text(ref.tr('ai_consults'),
                             style: TextStyle(
                               fontSize: 11,
                               color: AppColors.lightTextMuted,
@@ -1123,7 +1121,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 child: _buildCompactVital(
                   icon: Icons.qr_code_scanner_rounded,
                   iconColor: AppColors.primary,
-                  label: 'Scans',
+                  label: ref.tr('scans'),
                   value: '$totalScans',
                 ),
               ),
@@ -1134,7 +1132,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   iconColor: avgScore >= 80
                       ? AppColors.primary
                       : (avgScore >= 50 ? AppColors.warning : AppColors.error),
-                  label: 'Avg Health',
+                  label: ref.tr('avg_health'),
                   value: totalScans > 0 ? '$avgScore%' : '--',
                 ),
               ),
@@ -1143,7 +1141,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 child: _buildCompactVital(
                   icon: Icons.healing_rounded,
                   iconColor: diseaseCount > 0 ? AppColors.warning : const Color(0xFF94A3B8),
-                  label: 'Needs Care',
+                  label: ref.tr('needs_care'),
                   value: '$diseaseCount',
                   isWarning: diseaseCount > 0,
                 ),
@@ -1163,12 +1161,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 children: [
                   const Icon(Icons.lock_clock_rounded, color: AppColors.error, size: 20),
                   const SizedBox(width: 10),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Trial Ended — Features Locked',
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [ Text(ref.tr('trial_ended_locked'),
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
@@ -1177,7 +1170,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ),
                         SizedBox(height: 1),
                         Text(
-                          'Must pay for Pro or Farm to continue using the app',
+                          ref.tr('must_pay_msg'),
                           style: TextStyle(
                             fontSize: 11,
                             color: Color(0xFF991B1B),
@@ -1197,7 +1190,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       minimumSize: const Size(58, 30),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-                    child: const Text('Upgrade', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    child: Text(ref.tr('upgrade'), style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -1292,7 +1285,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             children: [
               Expanded(
                 child: Text(
-                  scan.plantName.isNotEmpty ? scan.plantName : 'Unknown Plant',
+                  scan.plantName.isNotEmpty ? scan.plantName : ref.tr('unknown_plant'),
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
@@ -1311,8 +1304,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     borderRadius: BorderRadius.circular(4),
                     border: Border.all(color: const Color(0xFFE2E8F0)),
                   ),
-                  child: const Text(
-                    'Offline',
+                  child: Text(ref.tr('offline'),
                     style: TextStyle(
                       fontSize: 9,
                       fontWeight: FontWeight.w600,

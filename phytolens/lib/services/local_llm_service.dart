@@ -20,6 +20,7 @@ import '../models/app_user.dart';
 import '../models/scan_result.dart';
 import 'agronomy_kb_service.dart';
 import 'supabase_service.dart';
+import 'language_service.dart';
 
 class LocalLLMService extends ChangeNotifier {
   static final LocalLLMService _instance = LocalLLMService._internal();
@@ -27,13 +28,13 @@ class LocalLLMService extends ChangeNotifier {
   LocalLLMService._internal();
 
   // ── Model Configuration ─────────────────────────────────────────────────
-  // TinyLlama 1.1B Chat Q4_K_M — compact and fast for offline mobile inference
-  static const String _modelFileName = 'tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf';
+  // Llama-3.2-1B-Instruct Q4_K_M — compact and highly capable for offline mobile inference (~814MB)
+  static const String _modelFileName = 'Llama-3.2-1B-Instruct-Q4_K_M.gguf';
   static const String _modelUrl =
-      'https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf';
-  static const int _modelSizeBytes = 669000000; // ~669MB approximate
+      'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf';
+  static const int _modelSizeBytes = 814000000; // ~814MB approximate
   static const String _modelVersionKey = 'local_llm_version';
-  static const String _currentVersion = 'tinyllama-1.1b-chat-v1';
+  static const String _currentVersion = 'llama-3.2-1b-instruct-v1';
   static const String _userContextKey = 'offline_user_context';
 
   // ── State ───────────────────────────────────────────────────────────────
@@ -128,21 +129,21 @@ $recentScans''';
     }
 
     return '''You are PhytoLens AI, an expert plant health advisor.
-You help farmers and gardeners understand plant diseases and treatments.
+You are given the user's app data, database records, and profile below. You MUST read this data carefully and use it to personalize your advice and suggestions.
 
 CRITICAL INSTRUCTIONS:
-1. Be extremely brief and concise. Keep responses to 1-3 sentences unless specifically asked for details.
-2. NEVER output code, programming syntax, HTML tags, or technical markup.
-3. NEVER wrap your response in code fences or backticks.
-4. Use simple, conversational language. Write like a friendly expert, not a computer.
-5. Use bullet points (•) for lists, not markdown syntax.
-6. If the user writes in Hindi, respond in Hindi.
+1. Provide actionable advice and tailored suggestions based on the user's specific garden type, location, and recent scan history.
+2. Be extremely brief and concise. Keep responses to 1-3 sentences unless specifically asked for details.
+3. NEVER output code, programming syntax, HTML tags, or technical markup.
+4. NEVER wrap your response in code fences or backticks.
+5. Use simple, conversational language. Write like a friendly expert, not a computer.
+6. Use bullet points (•) for lists, not markdown syntax.
+7. ${LanguageService().aiLanguageDirective}
 
-PRIVACY: You are communicating ONLY with the user described below. Never reference or share information about other users.
-
+USER DATABASE & APP CONTEXT:
 $userBlock
 
-Give actionable advice. Be encouraging. Use simple words.''';
+Give actionable advice and personalized suggestions. Be encouraging. Use simple words.''';
   }
 
   // ═══════════════════════════════════════════════════════════════════════

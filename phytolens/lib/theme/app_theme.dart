@@ -395,62 +395,70 @@ class AppTheme {
   // ── Text Theme ────────────────────────────────────────────────────────────
   // Display / Headline → Plus Jakarta Sans (warm, friendly)
   // Body / Label / Title → Inter (clean, legible)
+  // Indic fallback → Noto Sans Devanagari (Hindi) + Noto Sans Bengali
+  // Android ships Noto fonts natively — no additional download required.
+  static const List<String> _indicFallback = [
+    'Noto Sans Devanagari', // Hindi (हिन्दी)
+    'Noto Sans Bengali',    // Bengali (বাংলা)
+    'Noto Sans',            // Generic Noto catch-all
+  ];
+
   static TextTheme _buildTextTheme(Color primary, Color secondary, Color muted) {
     return TextTheme(
       // Display — splash / hero (Plus Jakarta Sans)
       displayLarge: GoogleFonts.plusJakartaSans(
           fontSize: 40, fontWeight: FontWeight.w800, color: primary,
-          letterSpacing: -1.0, height: 1.1),
+          letterSpacing: -1.0, height: 1.2).copyWith(fontFamilyFallback: _indicFallback),
       displayMedium: GoogleFonts.plusJakartaSans(
           fontSize: 32, fontWeight: FontWeight.w700, color: primary,
-          letterSpacing: -0.8, height: 1.15),
+          letterSpacing: -0.8, height: 1.25).copyWith(fontFamilyFallback: _indicFallback),
       displaySmall: GoogleFonts.plusJakartaSans(
           fontSize: 26, fontWeight: FontWeight.w700, color: primary,
-          letterSpacing: -0.5, height: 1.2),
+          letterSpacing: -0.5, height: 1.3).copyWith(fontFamilyFallback: _indicFallback),
 
       // Headlines (Plus Jakarta Sans)
       headlineLarge: GoogleFonts.plusJakartaSans(
           fontSize: 24, fontWeight: FontWeight.w700, color: primary,
-          letterSpacing: -0.4, height: 1.25),
+          letterSpacing: -0.4, height: 1.35).copyWith(fontFamilyFallback: _indicFallback),
       headlineMedium: GoogleFonts.plusJakartaSans(
           fontSize: 20, fontWeight: FontWeight.w700, color: primary,
-          letterSpacing: -0.3, height: 1.3),
+          letterSpacing: -0.3, height: 1.4).copyWith(fontFamilyFallback: _indicFallback),
       headlineSmall: GoogleFonts.plusJakartaSans(
           fontSize: 18, fontWeight: FontWeight.w600, color: primary,
-          letterSpacing: -0.2, height: 1.35),
+          letterSpacing: -0.2, height: 1.45).copyWith(fontFamilyFallback: _indicFallback),
 
       // Titles (Inter)
       titleLarge: GoogleFonts.inter(
           fontSize: 16, fontWeight: FontWeight.w600, color: primary,
-          letterSpacing: -0.1, height: 1.4),
+          letterSpacing: -0.1, height: 1.5).copyWith(fontFamilyFallback: _indicFallback),
       titleMedium: GoogleFonts.inter(
           fontSize: 15, fontWeight: FontWeight.w600, color: primary,
-          height: 1.4),
+          height: 1.5).copyWith(fontFamilyFallback: _indicFallback),
       titleSmall: GoogleFonts.inter(
           fontSize: 13, fontWeight: FontWeight.w500, color: secondary,
-          height: 1.4),
+          height: 1.5).copyWith(fontFamilyFallback: _indicFallback),
 
-      // Body (Inter)
+      // Body (Inter) — larger line height for Indic matras
       bodyLarge: GoogleFonts.inter(
           fontSize: 16, fontWeight: FontWeight.w400, color: primary,
-          height: 1.6),
+          height: 1.7).copyWith(fontFamilyFallback: _indicFallback),
       bodyMedium: GoogleFonts.inter(
           fontSize: 14, fontWeight: FontWeight.w400, color: secondary,
-          height: 1.55),
+          height: 1.65).copyWith(fontFamilyFallback: _indicFallback),
       bodySmall: GoogleFonts.inter(
           fontSize: 12, fontWeight: FontWeight.w400, color: muted,
-          height: 1.5),
+          height: 1.6).copyWith(fontFamilyFallback: _indicFallback),
 
       // Labels / Captions (Inter)
       labelLarge: GoogleFonts.inter(
           fontSize: 14, fontWeight: FontWeight.w600, color: primary,
-          letterSpacing: 0.1, height: 1.4),
+          letterSpacing: 0.1, height: 1.5).copyWith(fontFamilyFallback: _indicFallback),
       labelMedium: GoogleFonts.inter(
           fontSize: 12, fontWeight: FontWeight.w500, color: secondary,
-          letterSpacing: 0.2, height: 1.4),
+          letterSpacing: 0.2, height: 1.5).copyWith(fontFamilyFallback: _indicFallback),
       labelSmall: GoogleFonts.inter(
           fontSize: 11, fontWeight: FontWeight.w500, color: muted,
-          letterSpacing: 0.4, height: 1.4),
+          letterSpacing: 0.4, height: 1.5).copyWith(fontFamilyFallback: _indicFallback),
     );
   }
 }

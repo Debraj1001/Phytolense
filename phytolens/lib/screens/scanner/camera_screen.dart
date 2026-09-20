@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../providers/language_provider.dart';
 import '../../providers/scan_limit_provider.dart';
 import '../../services/ml_service.dart';
 import '../../services/groq_service.dart';
@@ -136,7 +137,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
     setState(() {
       _selectedImage = file;
       _analyzing = true;
-      _scanStage = 'Analyzing leaf...';
+      _scanStage = ref.tr('analyzing_leaf');
     });
 
     try {
@@ -155,7 +156,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
       final isAiEngineEnabled = ref.read(aiEngineProvider);
       final String userTier = limit.tier;
 
-      if (mounted) setState(() => _scanStage = 'Identifying plant...');
+      if (mounted) setState(() => _scanStage = ref.tr('identifying_plant'));
 
       // ── TIER 2: Pl@ntNet API (online botanical identification) ─────────
       if (isOnline && isAiEngineEnabled && (confidence < 0.70 || plantName == 'Unknown Plant' || diseaseName == 'Unrecognized')) {
@@ -212,7 +213,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
       // ── Generate tier-aware disease report via Groq (TEXT only) ────────
       if (diseaseName != 'Object (Non-Plant)' &&
           plantName != 'Unknown Plant' && plantName != 'Unrecognized Item') {
-        if (mounted) setState(() => _scanStage = 'Generating report...');
+        if (mounted) setState(() => _scanStage = ref.tr('generating_report'));
         try {
           if (isOnline && isAiEngineEnabled) {
             remedy = await _groq.getTieredAdvice(
@@ -288,16 +289,16 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
         final String friendlyMessage;
         final bool isWarning;
         if (errStr.contains('NOT_A_PLANT')) {
-          friendlyMessage = 'No plant leaf detected. Please take a clear photo of the leaf.';
+          friendlyMessage = ref.tr('err_not_a_plant');
           isWarning = true;
         } else if (errStr.contains('SocketException') || errStr.contains('network') || errStr.contains('Failed host lookup')) {
-          friendlyMessage = 'Network connection issue. Please check your internet and try again.';
+          friendlyMessage = ref.tr('err_network');
           isWarning = false;
         } else if (errStr.contains('limit') || errStr.contains('quota')) {
-          friendlyMessage = 'Daily scan limit reached. Please check back tomorrow.';
+          friendlyMessage = ref.tr('err_limit_reached');
           isWarning = true;
         } else {
-          friendlyMessage = 'Unable to analyze image. Please try again with clear lighting.';
+          friendlyMessage = ref.tr('err_unable_analyze');
           isWarning = false;
         }
 
@@ -347,10 +348,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
             const SizedBox(height: 16),
             Text(
               limit.isExpired
-                  ? 'Free Trial Concluded'
+                  ? ref.tr('free_trial_concluded')
                   : (limit.isNotStarted
-                      ? (cfg.trialPrice <= 0 ? 'Start ${cfg.trialDays}-Day Free Trial' : 'Start ₹${cfg.trialPrice.toInt()} Trial')
-                      : 'Daily Scan Limit Reached'),
+                      ? (cfg.trialPrice <= 0 ? ref.tr('start_x_day_free_trial').replaceAll('{days}', cfg.trialDays.toString()) : ref.tr('start_x_price_trial').replaceAll('{price}', '₹${cfg.trialPrice.toInt()}'))
+                      : ref.tr('daily_scan_limit_reached')),
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
@@ -360,10 +361,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
             const SizedBox(height: 12),
             Text(
               limit.isExpired
-                  ? 'Your ${cfg.trialDays}-day Free Trial has ended. There is no permanent free tier. Upgrade to Pro (${cfg.proPrice}/mo) or Farm Pack (${cfg.farmPrice}/mo) to continue scanning plants.'
+                  ? ref.tr('trial_ended_msg').replaceAll('{days}', cfg.trialDays.toString()).replaceAll('{pro_price}', cfg.proPrice.toString()).replaceAll('{farm_price}', cfg.farmPrice.toString())
                   : (limit.isNotStarted
                       ? 'Activate your ${cfg.trialDays}-Day Trial (${cfg.trialPrice <= 0 ? "Free" : "₹${cfg.trialPrice.toInt()}"}) to enjoy ${limit.limit} AI leaf scans per day, remedies, and treatment guides.'
-                      : 'You\'ve reached your daily limit of ${limit.limit} scans on your plan. Resets at midnight, or upgrade for higher daily allowances.'),
+                      : ref.tr('scan_limit_reached_msg').replaceAll('{limit}', limit.limit.toString())),
               style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.4),
               textAlign: TextAlign.center,
             ),
@@ -395,8 +396,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
               ),
               label: Text(
                 limit.isExpired
-                    ? 'Upgrade to Pro or Farm'
-                    : (limit.isNotStarted ? (cfg.trialPrice <= 0 ? 'Start Free Trial' : 'Activate ₹${cfg.trialPrice.toInt()} Trial') : 'Upgrade Plan'),
+                    ? ref.tr('upgrade_pro_farm')
+                    : (limit.isNotStarted ? (cfg.trialPrice <= 0 ? ref.tr('start_free_trial') : ref.tr('activate_price_trial').replaceAll('{price}', '₹${cfg.trialPrice.toInt()}')) : ref.tr('upgrade_plan')),
                 style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
               ),
             ),
@@ -421,13 +422,13 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: AppColors.error.withValues(alpha: 0.2)),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.lock_clock_rounded, size: 16, color: AppColors.error),
-                  SizedBox(width: 6),
+                  const Icon(Icons.lock_clock_rounded, size: 16, color: AppColors.error),
+                  const SizedBox(width: 6),
                   Text(
-                    'FREE TRIAL CONCLUDED',
+                    ref.tr('free_trial_concluded').toUpperCase(),
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.error, letterSpacing: 0.5),
                   ),
                 ],
@@ -444,14 +445,14 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
               child: const Icon(Icons.no_photography_rounded, color: AppColors.error, size: 40),
             ),
             const SizedBox(height: 20),
-            const Text(
-              'Plant Diagnosis Locked',
+            Text(
+              ref.tr('plant_diagnosis_locked'),
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              'Your ${cfg.trialDays}-Day Free Trial has ended. There is no permanent free tier. To diagnose crop pathologies and access tailored agronomic prescriptions, please upgrade to an active plan.',
+              ref.tr('trial_ended_msg').replaceAll('{days}', cfg.trialDays.toString()).replaceAll('{pro_price}', cfg.proPrice.toString()).replaceAll('{farm_price}', cfg.farmPrice.toString()),
               style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.45),
               textAlign: TextAlign.center,
             ),
@@ -469,14 +470,14 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
               child: Column(
                 children: [
                   _buildPlanHighlightRow(
-                    title: 'Pro Plan (${cfg.proPrice}/30d)',
-                    subtitle: '${cfg.proScanLimit} scans & ${cfg.proAiLimit} AI chats/day · Organic & chemical recipes',
+                    title: ref.tr('pro_plan_title').replaceAll('{price}', cfg.proPrice.toString()),
+                    subtitle: ref.tr('pro_plan_subtitle').replaceAll('{scans}', cfg.proScanLimit.toString()).replaceAll('{ai}', cfg.proAiLimit.toString()),
                     isHighlighted: true,
                   ),
                   const Divider(height: 20),
                   _buildPlanHighlightRow(
-                    title: 'Farm Pack (${cfg.farmPrice}/30d)',
-                    subtitle: '${cfg.farmScanLimit} scans/day · Multi-farm plot tracker · B2B retailers directory',
+                    title: ref.tr('farm_pack_title').replaceAll('{price}', cfg.farmPrice.toString()),
+                    subtitle: ref.tr('farm_pack_subtitle').replaceAll('{scans}', cfg.farmScanLimit.toString()),
                     isHighlighted: false,
                   ),
                 ],
@@ -486,7 +487,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
             ElevatedButton.icon(
               onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpgradeScreen())),
               icon: const Icon(Icons.flash_on_rounded, size: 20, color: Colors.white),
-              label: const Text('UPGRADE TO PRO OR FARM', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
+              label: Text(ref.tr('upgrade_to_pro_farm_caps'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 minimumSize: const Size(double.infinity, 50),
@@ -498,7 +499,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
             OutlinedButton.icon(
               onPressed: () => EmergencyDoctorPassSheet.show(context),
               icon: const Icon(Icons.medical_services_rounded, size: 16, color: Color(0xFF4F46E5)),
-              label: const Text('Emergency Doctor Pass (₹10 / 24h)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF4F46E5))),
+              label: Text(ref.tr('emergency_doctor_pass_price').replaceAll('{price}', '₹10'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF4F46E5))),
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: Color(0xFF6366F1), width: 1.2),
                 minimumSize: const Size(double.infinity, 44),
@@ -567,7 +568,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
               onTap: () => ref.read(navIndexProvider.notifier).state = 0,
             ),
           ),
-          title: const Text('PhytoLens Scanner', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700, fontSize: 18)),
+          title: Text(ref.tr('phytolens_scanner'), style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700, fontSize: 18)),
         ),
         body: SafeArea(
           child: _buildTrialExpiredPaywall(context, limitDisplay),
@@ -859,8 +860,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
             ),
           ).animate(onPlay: (c) => c.repeat(reverse: true)).scaleXY(end: 1.05, duration: 2.seconds),
           const SizedBox(height: 24),
-          const Text(
-            'Ready to Scan',
+          Text(
+            ref.tr('ready_to_scan'),
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
@@ -868,8 +869,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Point your camera at a plant leaf\nto identify diseases',
+          Text(
+            ref.tr('point_camera_hint'),
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,
@@ -903,10 +904,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
   }
 
   String _getLimitText(ScanLimitResult limit) {
-    if (limit.isExpired) return 'Trial Ended';
-    if (limit.isNotStarted) return 'Start Trial';
-    if (limit.isUnlimited) return '∞ Unlimited';
-    return '${limit.remaining}/${limit.limit} left';
+    if (limit.isExpired) return ref.tr('trial_ended');
+    if (limit.isNotStarted) return ref.tr('start_free_trial');
+    if (limit.isUnlimited) return ref.tr('unlimited_scans');
+    return ref.tr('quota_left').replaceAll('{remaining}', limit.remaining.toString()).replaceAll('{limit}', limit.limit.toString());
   }
 
 
@@ -947,17 +948,17 @@ class _CameraCaptureButton extends StatelessWidget {
   }
 }
 
-class _TipsSheet extends StatelessWidget {
+class _TipsSheet extends ConsumerWidget {
   const _TipsSheet();
 
   @override
-  Widget build(BuildContext context) {
-    const tips = [
-      ('📸', 'Close-up shots', 'Get within 30cm of the leaf for best results'),
-      ('☀️', 'Natural light', 'Outdoor light or bright indoor light works best'),
-      ('🍃', 'Single leaf', 'Focus on one leaf with visible symptoms'),
-      ('🔍', 'Sharp focus', 'Make sure the image is not blurry'),
-      ('⚠️', 'Affected area', 'Include the diseased part clearly in frame'),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tips = [
+      ('📸', ref.tr('tip_closeup'), ref.tr('tip_closeup_desc')),
+      ('☀️', ref.tr('tip_light'), ref.tr('tip_light_desc')),
+      ('🍃', ref.tr('tip_single'), ref.tr('tip_single_desc')),
+      ('🔍', ref.tr('tip_focus'), ref.tr('tip_focus_desc')),
+      ('⚠️', ref.tr('tip_area'), ref.tr('tip_area_desc')),
     ];
 
     return Padding(
@@ -966,8 +967,8 @@ class _TipsSheet extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Scanning Tips',
+          Text(
+            ref.tr('scanning_tips'),
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w700,
@@ -1016,13 +1017,13 @@ class _TipsSheet extends StatelessWidget {
   }
 }
 
-class _MidnightCountdownText extends StatefulWidget {
+class _MidnightCountdownText extends ConsumerStatefulWidget {
   const _MidnightCountdownText();
   @override
-  State<_MidnightCountdownText> createState() => _MidnightCountdownTextState();
+  ConsumerState<_MidnightCountdownText> createState() => _MidnightCountdownTextState();
 }
 
-class _MidnightCountdownTextState extends State<_MidnightCountdownText> {
+class _MidnightCountdownTextState extends ConsumerState<_MidnightCountdownText> {
   late Timer _timer;
   Duration _timeLeft = Duration.zero;
 
@@ -1051,7 +1052,7 @@ class _MidnightCountdownTextState extends State<_MidnightCountdownText> {
     final m = (_timeLeft.inMinutes % 60).toString().padLeft(2, '0');
     final s = (_timeLeft.inSeconds % 60).toString().padLeft(2, '0');
     return Text(
-      'Free scans reset in $h:$m:$s',
+      ref.tr('free_scans_reset').replaceAll('{time}', '$h:$m:$s'),
       style: const TextStyle(
         color: AppColors.textMuted,
         fontSize: 12,

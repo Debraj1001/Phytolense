@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
+import '../../providers/language_provider.dart';
 import '../../theme/colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class ModelManagerScreen extends StatefulWidget {
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+class ModelManagerScreen extends ConsumerStatefulWidget {
   const ModelManagerScreen({super.key});
 
   @override
-  State<ModelManagerScreen> createState() => _ModelManagerScreenState();
+  ConsumerState<ModelManagerScreen> createState() => _ModelManagerScreenState();
 }
 
-class _ModelManagerScreenState extends State<ModelManagerScreen> {
+class _ModelManagerScreenState extends ConsumerState<ModelManagerScreen> {
   bool _isGemmaDownloaded = false;
   bool _isDownloading = false;
   double _downloadProgress = 0.0;
@@ -51,7 +53,7 @@ class _ModelManagerScreenState extends State<ModelManagerScreen> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Offline AI Assistant is ready!')),
+        SnackBar(content: Text(ref.tr('offline_ai_ready'))),
       );
     }
   }
@@ -69,7 +71,7 @@ class _ModelManagerScreenState extends State<ModelManagerScreen> {
     return Scaffold(
       backgroundColor: AppColors.backgroundDark,
       appBar: AppBar(
-        title: const Text('Offline AI Setup'),
+        title: Text(ref.tr('offline_ai_setup')),
         backgroundColor: AppColors.cardDark,
         elevation: 0,
       ),
@@ -94,22 +96,20 @@ class _ModelManagerScreenState extends State<ModelManagerScreen> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.wifi_off, color: AppColors.primary, size: 32),
-                    const SizedBox(width: 12),
+                    Icon(Icons.wifi_off, color: AppColors.primary, size: 32),
+                    SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Smart Farm Assistant',
+                          Text(ref.tr('smart_farm_assistant'),
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                               color: AppColors.textPrimary,
                             ),
                           ),
-                          const Text(
-                            'Gemma 2B (Best for Agriculture)',
+                          Text(ref.tr('gemma_2b_best'),
                             style: TextStyle(
                               fontSize: 14,
                               color: AppColors.textSecondary,
@@ -120,34 +120,33 @@ class _ModelManagerScreenState extends State<ModelManagerScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Download this package to let the app answer your farming questions and generate scan reports even when you have no internet connection.',
+                SizedBox(height: 16),
+                Text(ref.tr('download_desc'),
                   style: TextStyle(
                     fontSize: 14,
                     color: AppColors.textSecondary,
                     height: 1.5,
                   ),
                 ),
-                const SizedBox(height: 16),
-                const Row(
+                SizedBox(height: 16),
+                Row(
                   children: [
                     Icon(Icons.sd_storage_outlined, size: 16, color: Colors.grey),
                     SizedBox(width: 4),
-                    Text('Size: ~1.5 GB', style: TextStyle(color: Colors.grey)),
+                    Text(ref.tr('size_1_5gb'), style: TextStyle(color: Colors.grey)),
                   ],
                 ),
-                const SizedBox(height: 24),
+                SizedBox(height: 24),
                 if (_isDownloading) ...[
                   LinearProgressIndicator(
                     value: _downloadProgress,
                     backgroundColor: AppColors.primary.withValues(alpha: 0.2),
                     valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   Center(
                     child: Text(
-                      'Downloading... ${(_downloadProgress * 100).toInt()}%',
+                      ref.tr('downloading_progress').replaceAll('{progress}', (_downloadProgress * 100).toInt().toString()),
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -155,8 +154,8 @@ class _ModelManagerScreenState extends State<ModelManagerScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      icon: const Icon(Icons.delete_outline, color: Colors.red),
-                      label: const Text('Remove Download', style: TextStyle(color: Colors.red)),
+                      icon: Icon(Icons.delete_outline, color: Colors.red),
+                      label: Text(ref.tr('remove_download'), style: TextStyle(color: Colors.red)),
                       onPressed: _deleteModel,
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: Colors.red),
@@ -168,8 +167,8 @@ class _ModelManagerScreenState extends State<ModelManagerScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      icon: const Icon(Icons.download),
-                      label: const Text('Download Now (Wi-Fi Recommended)'),
+                      icon: Icon(Icons.download),
+                      label: Text(ref.tr('download_now_wifi')),
                       onPressed: _downloadModel,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
@@ -182,15 +181,14 @@ class _ModelManagerScreenState extends State<ModelManagerScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 24),
-          const Text(
-            'What you get:',
+          SizedBox(height: 24),
+          Text(ref.tr('what_you_get'),
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
           ),
-          const SizedBox(height: 12),
-          _buildBenefitItem(Icons.chat_bubble_outline, 'Ask questions about crops anywhere'),
-          _buildBenefitItem(Icons.bolt, 'Instant answers without waiting for network'),
-          _buildBenefitItem(Icons.signal_cellular_off, 'Full offline crop disease reports'),
+          SizedBox(height: 12),
+          _buildBenefitItem(Icons.chat_bubble_outline, ref.tr('ask_anywhere')),
+          _buildBenefitItem(Icons.bolt, ref.tr('instant_answers')),
+          _buildBenefitItem(Icons.signal_cellular_off, ref.tr('offline_reports')),
         ],
       ),
     );
@@ -202,7 +200,7 @@ class _ModelManagerScreenState extends State<ModelManagerScreen> {
       child: Row(
         children: [
           Icon(icon, color: AppColors.primary, size: 20),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(
             child: Text(
               text,

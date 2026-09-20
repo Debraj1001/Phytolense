@@ -14,6 +14,7 @@ import 'sync_service.dart';
 import 'local_llm_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_service.dart';
+import 'language_service.dart';
 
 class GroqService {
   static const String _baseUrl = 'https://api.groq.com/openai/v1';
@@ -53,14 +54,25 @@ class GroqService {
         }
       } catch (_) {}
     }
+    // Dynamic language directive — adapts based on user's active language
+    final langDirective = LanguageService().aiLanguageDirective;
+
     return '''You are PhytoLens AI, an expert plant health advisor.
-You help farmers and gardeners understand plant diseases and treatments.
-CRITICAL INSTRUCTION: You MUST be extremely brief and concise. Keep responses to 1-2 sentences unless specifically asked for details. Be smart and get straight to the point.
-PRIVACY INSTRUCTION: You are communicating with the user described below. Never share details, data, or information about other users. Restrict your knowledge strictly to the current user.
+You are given the user's app data, database records, and profile below. You MUST read this data carefully and use it to personalize your advice and suggestions.
+
+CRITICAL INSTRUCTIONS:
+1. Provide actionable advice and tailored suggestions based on the user's specific garden type, location, and recent scan history.
+2. Be extremely brief and concise. Keep responses to 1-3 sentences unless specifically asked for details.
+3. NEVER output code, programming syntax, HTML tags, or technical markup.
+4. NEVER wrap your response in code fences or backticks.
+5. Use simple, conversational language. Write like a friendly expert, not a computer.
+6. Use bullet points (•) for lists, not markdown syntax.
+7. $langDirective
+
+USER DATABASE & APP CONTEXT:
 $contextStr
 
-If the user writes in Hindi, respond in Hindi.
-Give actionable, step-by-step advice. Be encouraging.''';
+Give actionable advice and personalized suggestions. Be encouraging. Use simple words.''';
   }
 
   // ─── Execute with Automatic Key Rotation & Failover ────────────────────────
@@ -112,11 +124,7 @@ Give actionable, step-by-step advice. Be encouraging.''';
     required String diseaseName,
     required int healthScore,
   }) async {
-    final prompt = '''Plant: $plantName
-Disease: $diseaseName
-Health Score: $healthScore/100
-
-Give a 2-3 sentence summary: what this disease is and the single most important action to take right now. Keep it very brief.''';
+    final prompt = 'Plant: $plantName\nDisease: $diseaseName\nHealth Score: $healthScore/100\n\nGive a 2-3 sentence summary and the most important action to take now.';
 
     return await _chat(prompt, maxTokens: 150);
   }
@@ -127,18 +135,7 @@ Give a 2-3 sentence summary: what this disease is and the single most important 
     required String diseaseName,
     required int healthScore,
   }) async {
-    final prompt = '''Plant: $plantName
-Disease: $diseaseName
-Health Score: $healthScore/100
-
-Please provide:
-1. What this disease is (simple explanation)
-2. Why it happens
-3. How to treat it (step by step, max 5 steps)
-4. How to prevent it in the future
-5. Any organic/natural remedies
-
-Keep your response concise and practical.''';
+    final prompt = 'Plant: $plantName\nDisease: $diseaseName\nHealth Score: $healthScore/100\n\nExplain this disease, why it happens, treatment steps, prevention, and organic remedies. Be concise and practical.';
 
     return await _chat(prompt);
   }
@@ -150,22 +147,7 @@ Keep your response concise and practical.''';
     required String diseaseName,
     required int healthScore,
   }) async {
-    final prompt = '''Plant: $plantName
-Disease: $diseaseName
-Health Score: $healthScore/100
-
-Provide a COMPREHENSIVE professional crop health report covering ALL of the following:
-
-1. **Disease Identification**: What this disease is, pathogen type (fungal/bacterial/viral/pest), and how to confirm it visually.
-2. **Root Cause Analysis**: Environmental factors, soil conditions, and common triggers.
-3. **Immediate Treatment Plan**: Step-by-step actions ranked by urgency (max 6 steps).
-4. **Organic/Natural Remedies**: Home-made sprays, companion planting, and bio-control agents.
-5. **Chemical Treatment Options**: Recommended fungicides/pesticides with application schedule.
-6. **Prevention Calendar**: Month-by-month actions to prevent recurrence across the growing season.
-7. **Yield Impact Assessment**: Estimated crop loss percentage if untreated vs. treated.
-8. **Related Conditions**: Other diseases this plant is susceptible to when weakened.
-
-Use clear headers. Be thorough but practical. This is for a professional farmer.''';
+    final prompt = 'Plant: $plantName\nDisease: $diseaseName\nHealth Score: $healthScore/100\n\nProvide a COMPREHENSIVE crop health report with disease identification, treatment steps, organic remedies, chemical options, prevention calendar, and yield impact. Use simple language.';
 
     return await _chat(prompt, maxTokens: 1200);
   }

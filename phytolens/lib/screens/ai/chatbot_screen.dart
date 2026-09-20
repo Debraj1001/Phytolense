@@ -23,6 +23,9 @@ import '../../widgets/glass_button.dart';
 import '../subscription/upgrade_screen.dart';
 import '../subscription/trial_activation_screen.dart';
 import '../../providers/app_config_provider.dart';
+import '../../localization/app_translations.dart';
+import '../../providers/language_provider.dart';
+
 
 class ChatMessage {
   final int? id;
@@ -117,12 +120,12 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
   }
 
   void _addWelcome() {
-    final offlineNote = _isOffline
-        ? '\n\n📱 *You are offline — I\'m using on-device AI. Quality may vary, but I\'m here to help!*'
-        : '';
+    final content = _isOffline
+        ? AppTranslations.tr('welcome_offline')
+        : AppTranslations.tr('welcome_online');
     final welcomeMsg = ChatMessage(
       role: 'assistant',
-      content: '🌿 Hi! I\'m PhytoLens AI${_isOffline ? ' (Offline Mode)' : ''}. I can help with plant diseases, treatments, growing tips, and garden advice.$offlineNote\n\nWhat\'s on your mind today?',
+      content: content,
       time: DateTime.now(),
       source: _isOffline ? 'offline' : 'online',
     );
@@ -166,7 +169,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(limitCheck.reason ?? 'Daily AI limit reached on your plan.'),
+            content: Text(limitCheck.reason ?? AppTranslations.tr('ai_limit_reached')),
             backgroundColor: AppColors.warning,
             behavior: SnackBarBehavior.floating,
           ),
@@ -238,8 +241,8 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
               _messages[lastIdx] = ChatMessage(
                 role: 'assistant',
                 content: !isAiEngineEnabled
-                    ? '📱 AI Engine is disabled in settings. You need to download the offline AI model (~669 MB) in Settings to use the chatbot locally, or re-enable the AI Engine in Profile Settings.'
-                    : '📱 The offline AI model needs to be downloaded first (~669 MB, one-time).\n\nGo to **Profile → AI Model Manager** to download, or connect to the internet to use cloud AI.',
+                    ? AppTranslations.tr('ai_engine_disabled')
+                    : AppTranslations.tr('model_not_downloaded'),
                 time: DateTime.now(),
                 source: 'offline',
               );
@@ -315,8 +318,8 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
     } catch (e) {
       if (mounted) {
         final errMsg = _isOffline
-            ? '⚠️ The on-device AI had a problem. Try closing other apps to free memory.'
-            : '⚠️ Sorry, I couldn\'t get a response. Please check your connection and try again.';
+            ? AppTranslations.tr('on_device_ai_problem')
+            : AppTranslations.tr('no_response_connection');
         final lastIdx = _messages.length - 1;
         final cleanErr = LocalLLMService.cleanResponse(errMsg);
         setState(() {
@@ -370,38 +373,37 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
         ),
         title: Row(
           children: [
-            const CircleAvatar(
+            CircleAvatar(
               radius: 16,
               backgroundColor: Color(0x2600897B),
               child: Icon(Icons.smart_toy, color: AppColors.secondary, size: 18),
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'PhytoLens AI',
+                  Text(ref.tr('phytolens_ai'),
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                   ),
                   Consumer(
                     builder: (context, ref, child) {
                       final aiState = ref.watch(aiLimitProvider);
                       if (aiState.isLoading || aiState.value == null) {
-                        return const Text('Plant Health Expert', style: TextStyle(fontSize: 11, color: AppColors.textMuted));
+                        return Text(ref.tr('plant_health_expert'), style: TextStyle(fontSize: 11, color: AppColors.textMuted));
                       }
                       final limit = aiState.value!;
                       if (limit.isNotStarted) {
-                        return const Text('Trial Required • 2-Day Trial for ₹1', style: TextStyle(fontSize: 11, color: AppColors.primaryLight));
+                        return Text(ref.tr('trial_required_price'), style: TextStyle(fontSize: 11, color: AppColors.primaryLight));
                       }
                       if (limit.isExpired) {
-                        return const Text('Trial Ended • Upgrade to Chat', style: TextStyle(fontSize: 11, color: AppColors.warning));
+                        return Text(ref.tr('trial_ended_upgrade'), style: TextStyle(fontSize: 11, color: AppColors.warning));
                       }
                       if (limit.isUnlimited) {
-                        return Text('Unlimited chats • ${limit.tier.toUpperCase()}', style: const TextStyle(fontSize: 11, color: AppColors.primaryLight));
+                        return Text(ref.tr('unlimited_chats').replaceAll('{tier}', limit.tier.toUpperCase()), style: const TextStyle(fontSize: 11, color: AppColors.primaryLight));
                       }
                       return Text(
-                        '${limit.remaining} / ${limit.limit} chats left • ${limit.tier.toUpperCase()}',
+                        ref.tr('chats_left').replaceAll('{remaining}', limit.remaining.toString()).replaceAll('{limit}', limit.limit.toString()).replaceAll('{tier}', limit.tier.toUpperCase()),
                         style: const TextStyle(fontSize: 11, color: AppColors.primaryLight),
                         overflow: TextOverflow.ellipsis,
                       );
@@ -420,7 +422,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
                 size: 38,
                 icon: Icons.refresh_rounded,
                 iconSize: 19,
-                tooltip: 'Reset Conversation',
+                tooltip: ref.tr('reset_conversation'),
                 onTap: _resetConversation,
               ),
             ),
@@ -428,7 +430,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
         ],
       ),
       body: _isLoadingHistory
-          ? const Center(child: LoadingDots(size: 8, color: AppColors.primary))
+          ? Center(child: LoadingDots(size: 8, color: AppColors.primary))
           : Column(
               children: [
                 // Messages
@@ -480,13 +482,13 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
                   color: AppColors.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.phone_android_rounded, size: 16, color: AppColors.primary),
                     SizedBox(width: 6),
                     Text(
-                      '📱 Offline Mode — On-device AI',
+                      ref.tr('offline_mode_ai'),
                       style: TextStyle(
                         fontSize: 12, 
                         fontWeight: FontWeight.w600,
@@ -496,7 +498,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: 8),
               _buildChatInput(safeBottom: 0),
             ],
           ),
@@ -519,29 +521,29 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
           children: [
             Text(
               limit.isExpired
-                  ? 'Free Trial Concluded'
-                  : (limit.isNotStarted ? (cfg.trialPrice <= 0 ? 'Start ${cfg.trialDays}-Day Free Trial' : 'Start ₹${cfg.trialPrice.toInt()} Trial') : 'Daily AI Limit Reached'),
+                  ? ref.tr('free_trial_concluded')
+                  : (limit.isNotStarted ? (cfg.trialPrice <= 0 ? ref.tr('start_free_trial_days').replaceAll('{days}', cfg.trialDays.toString()) : ref.tr('start_trial_price').replaceAll('{price}', cfg.trialPrice.toInt().toString())) : ref.tr('daily_ai_limit_reached')),
               style: TextStyle(
                 color: limit.isExpired ? AppColors.error : AppColors.warning,
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
               ),
             ),
-            const SizedBox(height: 6),
+            SizedBox(height: 6),
             Text(
               limit.isExpired
-                  ? 'Your ${cfg.trialDays}-day Free Trial has ended. There is no permanent free tier. Please upgrade to Pro (${cfg.proPrice}/mo) or Farm Pack (${cfg.farmPrice}/mo) to continue chatting with AI Plant Doctor.'
+                  ? ref.tr('trial_ended_desc').replaceAll('{days}', cfg.trialDays.toString()).replaceAll('{pro_price}', cfg.proPrice.toString()).replaceAll('{farm_price}', cfg.farmPrice.toString())
                   : (limit.isNotStarted
-                      ? 'Activate your ${cfg.trialDays}-Day Trial (${cfg.trialPrice <= 0 ? "Free" : "₹${cfg.trialPrice.toInt()}"}) to ask up to ${limit.limit} questions every day to our AI Botanist.'
-                      : 'You\'ve reached your daily limit of ${limit.limit} AI chats on your plan. Resets at midnight, or upgrade for higher allowances.'),
+                      ? ref.tr('activate_trial_desc').replaceAll('{days}', cfg.trialDays.toString()).replaceAll('{price_text}', cfg.trialPrice <= 0 ? ref.tr('free_text') : '₹${cfg.trialPrice.toInt()}').replaceAll('{limit}', limit.limit.toString())
+                      : ref.tr('limit_reached_desc').replaceAll('{limit}', limit.limit.toString())),
               style: const TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.4),
               textAlign: TextAlign.center,
             ),
             if (!limit.isExpired) ...[
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               const _CountdownText(),
             ],
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             GestureDetector(
               onTap: () => Navigator.push(
                 context,
@@ -567,11 +569,11 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(limit.isNotStarted ? Icons.stars_rounded : Icons.flash_on_rounded, color: Colors.white, size: 18),
-                    const SizedBox(width: 8),
+                    SizedBox(width: 8),
                     Text(
                       limit.isExpired
-                          ? 'UPGRADE TO PRO OR FARM'
-                          : (limit.isNotStarted ? (cfg.trialPrice <= 0 ? 'START FREE TRIAL' : 'ACTIVATE ₹${cfg.trialPrice.toInt()} TRIAL') : 'UPGRADE PLAN'),
+                          ? ref.tr('upgrade_pro_farm')
+                          : (limit.isNotStarted ? (cfg.trialPrice <= 0 ? ref.tr('start_free_trial_upper') : ref.tr('activate_trial_price_upper').replaceAll('{price}', cfg.trialPrice.toInt().toString())) : ref.tr('upgrade_plan')),
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -615,7 +617,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
               maxLines: 4,
               minLines: 1,
               decoration: InputDecoration(
-                hintText: isLoading ? 'Checking AI status...' : 'Ask about your plant...',
+                hintText: isLoading ? ref.tr('checking_ai_status') : ref.tr('ask_about_plant'),
                 filled: true,
                 fillColor: Colors.white,
                 border: OutlineInputBorder(
@@ -636,7 +638,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
               onSubmitted: isLoading ? null : (v) => _sendMessage(v),
             ),
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: 10),
           BouncingButton(
             scaleFactor: 0.90,
             onTap: (_isTyping || isLoading) ? null : () => _sendMessage(_textCtrl.text),
@@ -700,9 +702,9 @@ class _ChatBubble extends StatelessWidget {
             CircleAvatar(
               radius: 14,
               backgroundColor: AppColors.secondary.withValues(alpha: 0.15),
-              child: const Icon(Icons.smart_toy, size: 14, color: AppColors.secondary),
+              child: Icon(Icons.smart_toy, size: 14, color: AppColors.secondary),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
           ],
           Flexible(
             child: Container(
@@ -726,7 +728,7 @@ class _ChatBubble extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (message.content.isEmpty && !isUser)
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.symmetric(vertical: 4, horizontal: 6),
                       child: LoadingDots(size: 6, color: AppColors.secondary),
                     )
@@ -793,7 +795,7 @@ class _ChatBubble extends StatelessWidget {
                       ),
                     ),
                   if (message.content.isNotEmpty) ...[
-                    const SizedBox(height: 4),
+                    SizedBox(height: 4),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -807,7 +809,7 @@ class _ChatBubble extends StatelessWidget {
                           ),
                         ),
                         if (message.source == 'offline') ...[
-                          const SizedBox(width: 4),
+                          SizedBox(width: 4),
                           Icon(
                             Icons.offline_bolt_rounded,
                             size: 11,
@@ -821,7 +823,7 @@ class _ChatBubble extends StatelessWidget {
               ),
             ),
           ),
-          if (isUser) const SizedBox(width: 8),
+          if (isUser) SizedBox(width: 8),
         ],
       ),
     ).animate().fadeIn(duration: 250.ms).slideY(begin: 0.1, end: 0);

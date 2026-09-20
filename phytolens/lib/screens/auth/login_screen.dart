@@ -11,14 +11,17 @@ import '../../theme/colors.dart';
 import '../../widgets/loading_dots.dart';
 import 'email_verification_screen.dart';
 import '../subscription/trial_activation_screen.dart';
+import '../../widgets/language_selector_sheet.dart';
+import '../../providers/language_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
   bool _loading = false;
@@ -82,7 +85,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       debugPrint('Error sending OTP/magic link: $e');
       setState(() {
-        _error = 'Failed to send verification code. Please try again.';
+        _error = ref.tr('failed_send_otp');
       });
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -121,6 +124,17 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.lightBg,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.language, color: AppColors.lightTextPrimary),
+            onPressed: () => LanguageSelectorSheet.show(context, ref),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -162,7 +176,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
               // Heading
               Text(
-                'Welcome Back',
+                ref.tr('welcome_to'),
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 28,
                   fontWeight: FontWeight.w700,
@@ -174,7 +188,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 8),
 
               Text(
-                'Sign in to diagnose crop diseases, consult AI agronomists, and track your garden.',
+                ref.tr('login_subtitle'),
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   color: AppColors.lightTextSecondary,
@@ -197,7 +211,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         fontSize: 15,
                       ),
                       decoration: InputDecoration(
-                        labelText: 'Email Address',
+                        labelText: ref.tr('email'),
                         labelStyle: GoogleFonts.inter(
                           color: AppColors.lightTextMuted,
                           fontSize: 13,
@@ -232,10 +246,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
-                          return 'Please enter your email';
+                          return ref.tr('please_enter_email');
                         }
                         if (!value.contains('@') || !value.contains('.')) {
-                          return 'Please enter a valid email address';
+                          return ref.tr('please_enter_valid_email');
                         }
                         return null;
                       },
@@ -291,7 +305,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         onPressed: _loading ? null : _sendOtp,
                         child: _loading
                             ? const ButtonDots()
-                            : const Text('Send OTP'),
+                            : Text(ref.tr('send_otp')),
                       ),
                     ),
                   ],
@@ -342,7 +356,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             const SizedBox(width: 10),
                             Text(
-                              'Continue with Google',
+                              ref.tr('sign_in_google'),
                               style: GoogleFonts.inter(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w600,

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'config/constants.dart';
 import 'config/env.dart';
 import 'theme/app_theme.dart';
@@ -15,12 +16,18 @@ import 'screens/auth/login_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'services/sync_service.dart';
 import 'services/notification_service.dart';
+import 'services/language_service.dart';
+import 'providers/language_provider.dart';
+import 'widgets/app_guard.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Load env variables
   await dotenv.load(fileName: '.env');
+
+  // Initialize language service (loads persisted language preference)
+  await LanguageService().init();
 
   // Status bar overlay style
   SystemChrome.setSystemUIOverlayStyle(
@@ -65,22 +72,44 @@ Future<void> main() async {
   runApp(const ProviderScope(child: PhytoLensApp()));
 }
 
-class PhytoLensApp extends StatelessWidget {
+class PhytoLensApp extends ConsumerWidget {
   const PhytoLensApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'PhytoLens',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      initialRoute: AppConstants.routeSplash,
-      routes: {
-        AppConstants.routeSplash: (_) => const SplashScreen(),
-        AppConstants.routeOnboarding: (_) => const OnboardingScreen(),
-        AppConstants.routeLogin: (_) => const LoginScreen(),
-        AppConstants.routeHome: (_) => const HomeScreen(),
-      },
+  Widget build(BuildContext context, WidgetRef ref) {
+    final langService = ref.watch(languageProvider);
+    final locale = Locale(langService.languageCode);
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 800),
+      switchInCurve: Curves.easeInOutCubic,
+      switchOutCurve: Curves.easeInOutCubic,
+      child: MaterialApp(
+        key: ValueKey(locale.languageCode),
+        title: 'PhytoLens',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        locale: locale,
+        supportedLocales: const [
+          Locale('en', 'US'),
+          Locale('hi', 'IN'),
+          Locale('bn', 'IN'),
+        ],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        navigatorKey: appNavigatorKey,
+        initialRoute: AppConstants.routeSplash,
+        routes: {
+          AppConstants.routeSplash: (_) => const SplashScreen(),
+          AppConstants.routeOnboarding: (_) => const OnboardingScreen(),
+          AppConstants.routeLogin: (_) => const LoginScreen(),
+          AppConstants.routeHome: (_) => const HomeScreen(),
+        },
+        builder: (context, child) => AppGuard(child: child ?? const SizedBox.shrink()),
+      ),
     );
   }
 }

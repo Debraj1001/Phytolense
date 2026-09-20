@@ -6,6 +6,7 @@
 // This is the FIRST fallback (Tier 0) before the heavy SLM model.
 
 import '../data/agronomy_kb.dart';
+import 'language_service.dart';
 
 class AgronomyKBService {
   static final AgronomyKBService _instance = AgronomyKBService._internal();
@@ -92,41 +93,42 @@ class AgronomyKBService {
   }
 
   String _formatDetailedReport(AgronomyEntry entry, int healthScore, int? severity) {
+    final ls = LanguageService();
     if (entry.pathogenType == 'healthy') {
-      return '## ✅ ${entry.plantName} — Healthy\n\n'
-          '**Health Score:** $healthScore/100\n\n'
+      return '## ✅ ${entry.plantName} — ${ls.tr("healthy")}\n\n'
+          '**${ls.tr("report_health_score")}:** $healthScore/100\n\n'
           '${entry.quickSummary}\n\n'
-          '### Preventive Care\n'
+          '### ${ls.tr("report_preventive_care")}\n'
           '${entry.preventionTips.map((t) => '- $t').join('\n')}\n\n'
-          '### Organic Boost\n'
+          '### ${ls.tr("report_organic_boost")}\n'
           '- **${entry.organicRemedy.name}**: ${entry.organicRemedy.preparation}\n'
-          '- Dosage: ${entry.organicRemedy.dosage}\n'
-          '- Frequency: ${entry.organicRemedy.frequency}';
+          '- ${ls.tr("report_dosage")}: ${entry.organicRemedy.dosage}\n'
+          '- ${ls.tr("report_frequency")}: ${entry.organicRemedy.frequency}';
     }
 
-    final severityStr = severity != null ? ' | Severity: $severity%' : '';
+    final severityStr = severity != null ? ' | ${ls.tr("severity")}: $severity%' : '';
 
     return '## ${entry.diseaseName} on ${entry.plantName}\n\n'
-        '**Health Score:** $healthScore/100$severityStr\n'
-        '**Type:** ${entry.pathogenType.toUpperCase()} | **Risk:** ${entry.severity.toUpperCase()}\n\n'
-        '### What Is This?\n'
+        '**${ls.tr("report_health_score")}:** $healthScore/100$severityStr\n'
+        '**${ls.tr("report_type_label")}:** ${entry.pathogenType.toUpperCase()} | **${ls.tr("report_risk_label")}:** ${entry.severity.toUpperCase()}\n\n'
+        '### ${ls.tr("report_what_is_this")}\n'
         '${entry.quickSummary}\n\n'
-        '### Immediate Actions\n'
+        '### ${ls.tr("report_immediate_actions")}\n'
         '${entry.immediateActions.asMap().entries.map((e) => '${e.key + 1}. ${e.value}').join('\n')}\n\n'
-        '### 🌿 Organic Remedy\n'
+        '### ${ls.tr("report_organic_remedy")}\n'
         '- **${entry.organicRemedy.name}**\n'
-        '- Preparation: ${entry.organicRemedy.preparation}\n'
-        '- Dosage: ${entry.organicRemedy.dosage}\n'
-        '- Frequency: ${entry.organicRemedy.frequency}\n\n'
-        '### 💊 Chemical Treatment\n'
+        '- ${ls.tr("report_preparation")}: ${entry.organicRemedy.preparation}\n'
+        '- ${ls.tr("report_dosage")}: ${entry.organicRemedy.dosage}\n'
+        '- ${ls.tr("report_frequency")}: ${entry.organicRemedy.frequency}\n\n'
+        '### ${ls.tr("report_chemical_treatment")}\n'
         '- **Active Ingredient:** ${entry.chemicalRemedy.activeIngredient}\n'
         '- **Trade Name (India):** ${entry.chemicalRemedy.tradeName}\n'
-        '- **Dosage:** ${entry.chemicalRemedy.dosage}\n'
-        '- **Schedule:** ${entry.chemicalRemedy.spraySchedule}\n'
-        '- **Safety (PHI):** ${entry.chemicalRemedy.safetyInterval}\n\n'
-        '### Prevention\n'
+        '- **${ls.tr("report_dosage")}:** ${entry.chemicalRemedy.dosage}\n'
+        '- **${ls.tr("report_spray_schedule")}:** ${entry.chemicalRemedy.spraySchedule}\n'
+        '- **${ls.tr("report_safety_interval")} (PHI):** ${entry.chemicalRemedy.safetyInterval}\n\n'
+        '### ${ls.tr("report_prevention")}\n'
         '${entry.preventionTips.map((t) => '- $t').join('\n')}\n\n'
-        '### Yield Impact\n'
+        '### ${ls.tr("report_yield_impact")}\n'
         '${entry.yieldImpact}\n\n'
         '_📱 Instant offline diagnosis powered by PhytoLens Agronomy KB._';
   }

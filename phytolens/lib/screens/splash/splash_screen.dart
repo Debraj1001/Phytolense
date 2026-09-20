@@ -11,6 +11,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../config/constants.dart';
 import '../../services/supabase_service.dart';
+import '../../services/language_service.dart';
+import '../../widgets/language_selector_sheet.dart';
 import '../../theme/colors.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
@@ -124,6 +126,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
     await Future.delayed(const Duration(milliseconds: 2600));
     if (!mounted) return;
+
+    if (!LanguageService().hasSelectedLanguage) {
+      await LanguageSelectorSheet.show(context, ref, isDismissible: false);
+      if (!mounted) return;
+    }
 
     setState(() => _exiting = true);
     await _exitCtrl.forward();

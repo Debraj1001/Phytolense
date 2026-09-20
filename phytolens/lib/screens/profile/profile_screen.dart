@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../providers/language_provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -27,10 +28,12 @@ import '../../widgets/glass_button.dart';
 import 'about_screen.dart';
 import 'privacy_screen.dart';
 import 'edit_profile_screen.dart';
+import '../../widgets/language_selector_sheet.dart';
 import '../../widgets/smooth_page_route.dart';
 import '../../widgets/bouncing_button.dart';
 import '../../services/trial_service.dart';
 import '../../providers/app_config_provider.dart';
+import '../../localization/app_translations.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -103,12 +106,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.cardDark,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Sign Out', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
-        content: const Text('Are you sure you want to sign out of your account?', style: TextStyle(color: AppColors.textSecondary)),
+        title: Text(ref.tr('sign_out'), style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+        content: Text(ref.tr('sign_out_confirm'), style: TextStyle(color: AppColors.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
+            child: Text(ref.tr('cancel_text'), style: TextStyle(color: AppColors.textMuted)),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -116,7 +119,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               backgroundColor: AppColors.error,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            child: const Text('Sign Out'),
+            child: Text(ref.tr('sign_out')),
           ),
         ],
       ),
@@ -128,7 +131,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const Center(
+      builder: (_) => Center(
         child: CircularProgressIndicator(color: AppColors.primary),
       ),
     );
@@ -165,7 +168,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
             flexibleSpace: FlexibleSpaceBar(
               background: _loading
-                  ? const Center(child: ShimmerProfileHeader())
+                  ? Center(child: ShimmerProfileHeader())
                   : _buildProfileHeader(),
             ),
           ),
@@ -176,24 +179,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 if (_loading)
                   Column(children: [
                     ShimmerBox(width: double.infinity, height: 80, radius: 16),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                     ShimmerBox(width: double.infinity, height: 80, radius: 16),
                   ])
                 else ...[
                   // Stats row
                   _buildStatsRow().animate().fadeIn(delay: 100.ms),
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
 
                   // Subscription card
                   if (_user != null)
                     _buildUpgradeCard().animate().fadeIn(delay: 150.ms),
 
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
 
                   // Menu items
                   _buildMenuSection(),
 
-                  const SizedBox(height: 70),
+                  SizedBox(height: 70),
                 ],
               ]),
             ),
@@ -204,7 +207,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Widget _buildProfileHeader() {
-    if (_user == null) return const SizedBox.shrink();
+    if (_user == null) return SizedBox.shrink();
 
     final tier = _user!.subscriptionTier;
     final tierColor = tier == 'farm'
@@ -277,7 +280,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 10),
+              SizedBox(height: 10),
               Text(
                 _user!.displayName,
                 style: const TextStyle(
@@ -286,7 +289,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   color: AppColors.textPrimary,
                 ),
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: 4),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -304,7 +307,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         else if (tier == 'pro') const Text('⚡ ', style: TextStyle(fontSize: 11)),
                         Text(
                           _user!.isPaidActive
-                              ? (tier == 'farm' ? 'FARM PACK' : 'PRO')
+                              ? (tier == 'farm' ? ref.tr('farm_pack_upper') : 'PRO')
                               : 'TRIAL',
                           style: TextStyle(
                             fontSize: 11,
@@ -315,7 +318,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                   Flexible(
                     child: Text(
                       _user!.levelTitle,
@@ -328,7 +331,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              SizedBox(height: 10),
               // Dedicated Edit Profile Pill Button
               BouncingButton(
                 onTap: () async {
@@ -347,13 +350,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.edit_outlined, size: 13, color: AppColors.primaryDark),
                       SizedBox(width: 6),
                       Text(
-                        'Edit Profile Details',
+                        ref.tr('edit_profile_details'),
                         style: TextStyle(fontSize: 12, color: AppColors.primaryDark, fontWeight: FontWeight.w700),
                       ),
                     ],
@@ -372,25 +375,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       children: [
         _StatCard(
           value: '$_scanCount',
-          label: 'Total Scans',
+          label: ref.tr('total_scans'),
           icon: Icons.camera_alt_outlined,
         ),
-        const SizedBox(width: 10),
+        SizedBox(width: 10),
         _StatCard(
           value: '${_user?.xp ?? 0}',
-          label: 'XP Points',
+          label: ref.tr('xp_points'),
           icon: Icons.star_border,
         ),
-        const SizedBox(width: 10),
+        SizedBox(width: 10),
         _StatCard(
           value: '${_user?.streak ?? 0}',
-          label: 'Day Streak',
+          label: ref.tr('day_streak'),
           icon: Icons.local_fire_department_outlined,
         ),
-        const SizedBox(width: 10),
+        SizedBox(width: 10),
         _StatCard(
           value: '${_user?.badges.length ?? 0}',
-          label: 'Badges',
+          label: ref.tr('badges_text'),
           icon: Icons.emoji_events_outlined,
         ),
       ],
@@ -428,10 +431,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: isFarm
-                ? const [Color(0xFFD97706), Color(0xFFB45309), Color(0xFF78350F)]
+                ? [Color(0xFFD97706), Color(0xFFB45309), Color(0xFF78350F)]
                 : (isPro
-                    ? const [Color(0xFF0284C7), Color(0xFF0369A1), Color(0xFF075985)]
-                    : const [Color(0xFF059669), Color(0xFF0D9488), Color(0xFF0284C7)]),
+                    ? [Color(0xFF0284C7), Color(0xFF0369A1), Color(0xFF075985)]
+                    : [Color(0xFF059669), Color(0xFF0D9488), Color(0xFF0284C7)]),
           ),
           borderRadius: BorderRadius.circular(AppTokens.radiusLG),
           boxShadow: [
@@ -458,7 +461,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 color: Colors.white,
               ),
             ),
-            const SizedBox(width: 14),
+            SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -466,7 +469,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   Row(
                     children: [
                       Text(
-                        isFarm ? 'Farm Pack Active' : (isPro ? 'Pro Plan Active' : 'Upgrade to Pro / Farm'),
+                        isFarm ? ref.tr('farm_pack_active') : (isPro ? ref.tr('pro_plan_active') : ref.tr('upgrade_to_pro_farm')),
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
@@ -475,7 +478,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ),
                       ),
                       if (isPaid) ...[
-                        const SizedBox(width: 6),
+                        SizedBox(width: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
@@ -490,12 +493,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       ],
                     ],
                   ),
-                  const SizedBox(height: 2),
+                  SizedBox(height: 2),
                   Text(
                     isPaid && expiry != null
                         ? '${daysRemaining > 0 ? '$daysRemaining days remaining' : 'Expires today'} · ${DateFormat('MMM dd, yyyy').format(expiry)}'
                         : (isPaid
-                            ? 'Unlimited Scans & Agronomy Active'
+                            ? ref.tr('unlimited_scans_active')
                             : '${cfg.proScanLabel} - ${cfg.farmScanLabel} · AI chats · Analytics'),
                     style: TextStyle(
                       fontSize: 12,
@@ -512,7 +515,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 color: Colors.white.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.white),
+              child: Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.white),
             ),
           ],
         ),
@@ -532,24 +535,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final String subscriptionBadge;
     final Color badgeColor;
     if (isPaid) {
-      subscriptionBadge = user!.subscriptionTier.toLowerCase() == 'farm' ? 'Farm Pack' : 'Pro Tier';
+      subscriptionBadge = user!.subscriptionTier.toLowerCase() == 'farm' ? ref.tr('farm_pack') : ref.tr('pro_tier');
       badgeColor = AppColors.secondary;
     } else if (trialInfo.isActive) {
-      subscriptionBadge = 'Trial (${trialInfo.remainingDays}d left)';
+      subscriptionBadge = ref.tr('trial_days_left').replaceAll('{days}', trialInfo.remainingDays.toString());
       badgeColor = AppColors.primary;
     } else if (trialInfo.isExpired) {
-      subscriptionBadge = 'Trial Expired';
+      subscriptionBadge = ref.tr('trial_expired');
       badgeColor = AppColors.error;
     } else {
-      subscriptionBadge = 'Start Trial';
+      subscriptionBadge = ref.tr('start_trial');
       badgeColor = AppColors.primary;
     }
 
     final items = [
       _MenuItem(
         icon: Icons.person_outline,
-        label: 'Edit Profile Details',
-        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.textMuted),
+        label: ref.tr('edit_profile_details'),
+        trailing: Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.textMuted),
         onTap: () {
           if (_user != null) {
             Navigator.push(
@@ -561,7 +564,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
       _MenuItem(
         icon: Icons.workspace_premium_outlined,
-        label: 'My Subscription & Limits',
+        label: ref.tr('my_subscription_limits'),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -584,8 +587,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ),
               ),
             ),
-            const SizedBox(width: 6),
-            const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.textMuted),
+            SizedBox(width: 6),
+            Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.textMuted),
           ],
         ),
         onTap: () {
@@ -599,7 +602,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
       _MenuItem(
         icon: Icons.local_florist_outlined,
-        label: 'My Garden',
+        label: ref.tr('my_garden'),
         trailing: Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
           decoration: BoxDecoration(
@@ -607,7 +610,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             borderRadius: BorderRadius.circular(6),
           ),
           child: Text(
-            isPaid ? 'UNLOCKED' : 'PRO / FARM',
+            isPaid ? 'UNLOCKED' : ref.tr('pro_farm_upper'),
             style: TextStyle(
               fontSize: 9,
               fontWeight: FontWeight.w800,
@@ -631,7 +634,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
       _MenuItem(
         icon: Icons.cloud_download_outlined,
-        label: 'Offline AI Model',
+        label: ref.tr('offline_ai_model'),
         onTap: () {
           Navigator.push(
             context,
@@ -641,12 +644,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
       _SwitchMenuItem(
         icon: Icons.auto_awesome,
-        label: 'AI Cloud Engine',
+        label: ref.tr('ai_cloud_engine'),
         subtitle: isLocked
             ? 'Access locked — Trial ended'
             : (ref.watch(aiEngineProvider)
-                ? 'Cloud Vision & LLM Diagnosis active'
-                : 'Edge TFLite Model active (data saving)'),
+                ? ref.tr('cloud_vision_llm_active')
+                : ref.tr('edge_tflite_active')),
         value: !isLocked && ref.watch(aiEngineProvider),
         badge: isLocked
             ? Container(
@@ -667,7 +670,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
       _MenuItem(
         icon: Icons.insights_rounded,
-        label: 'Crop Health Analytics',
+        label: ref.tr('crop_health_analytics'),
         trailing: Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
           decoration: BoxDecoration(
@@ -703,15 +706,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         onTap: () {},
       ),
       _MenuItem(
-        icon: Icons.language_outlined,
-        label: 'Language',
-        trailing: const Text('English',
-            style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
-        onTap: () {},
+        icon: Icons.language,
+        label: AppTranslations.tr('language'),
+        onTap: () => LanguageSelectorSheet.show(context, ref),
       ),
       _MenuItem(
         icon: Icons.privacy_tip_outlined,
-        label: 'Privacy Policy',
+        label: ref.tr('privacy_policy'),
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const PrivacyScreen()),
@@ -719,7 +720,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
       _MenuItem(
         icon: Icons.help_outline,
-        label: 'Help & Support',
+        label: ref.tr('help_support'),
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const HelpSupportScreen()),
@@ -727,7 +728,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
       _MenuItem(
         icon: Icons.info_outline,
-        label: 'About PhytoLens',
+        label: ref.tr('about_phytolens'),
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const AboutScreen()),
@@ -735,7 +736,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
       _MenuItem(
         icon: Icons.logout,
-        label: 'Sign Out',
+        label: ref.tr('sign_out'),
         color: AppColors.error,
         onTap: _signOut,
       ),
@@ -791,7 +792,7 @@ class _StatCard extends StatelessWidget {
         child: Column(
           children: [
             Icon(icon, size: 22, color: AppColors.primaryDark),
-            const SizedBox(height: 6),
+            SizedBox(height: 6),
             Text(
               value,
               style: const TextStyle(
@@ -803,7 +804,7 @@ class _StatCard extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 2),
+            SizedBox(height: 2),
             Text(
               label,
               style: const TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.w500),

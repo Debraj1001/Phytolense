@@ -68,3 +68,10 @@ Thumbs.db
 # Root stray downloads
 *.pdf
 /google-services*.json
+
+# Web App Artifacts
+web/node_modules/
+node_modules/
+web/dist/
+dist/
+

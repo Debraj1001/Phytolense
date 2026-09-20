@@ -3,63 +3,65 @@
 // 5-step swipeable flow: tinted hero card, emerald pill dots, 12px-radius CTA.
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../providers/language_provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../config/constants.dart';
 import '../../theme/colors.dart';
 
-class OnboardingScreen extends StatefulWidget {
+class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
   @override
-  State<OnboardingScreen> createState() => _OnboardingScreenState();
+  ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
+class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
-  static const List<_OnboardPage> _pages = [
+  List<_OnboardPage> get _pages => [
     _OnboardPage(
       emoji: '📸',
-      title: 'Scan Any Plant',
+      title: ref.tr('onboarding_title_1'),
       subtitle:
-          'Take a photo of any plant leaf to instantly detect diseases with AI-powered analysis.',
-      tint: Color(0xFFD1FAE5),
+          ref.tr('onboarding_desc_1'),
+      tint: const Color(0xFFD1FAE5),
       accent: AppColors.primary,
     ),
     _OnboardPage(
       emoji: '🔍',
-      title: 'AI Detects Instantly',
+      title: ref.tr('onboarding_title_2'),
       subtitle:
-          'Our on-device ML model identifies 38+ plant diseases in seconds, even offline.',
-      tint: Color(0xFFD1FAE5),
+          ref.tr('onboarding_desc_2'),
+      tint: const Color(0xFFD1FAE5),
       accent: AppColors.primary,
     ),
     _OnboardPage(
       emoji: '💊',
-      title: 'Get Expert Remedies',
+      title: ref.tr('onboarding_title_3'),
       subtitle:
-          'Groq AI gives you step-by-step treatment plans in simple language or Hindi.',
-      tint: Color(0xFFDEF7EC),
-      accent: Color(0xFF059669),
+          ref.tr('onboarding_desc_3'),
+      tint: const Color(0xFFDEF7EC),
+      accent: const Color(0xFF059669),
     ),
     _OnboardPage(
       emoji: '📊',
-      title: 'Track Garden Health',
+      title: ref.tr('onboarding_title_4'),
       subtitle:
-          'View health trends, charts, and history for all your plants in one dashboard.',
-      tint: Color(0xFFECFDF5),
-      accent: Color(0xFF10B981),
+          ref.tr('onboarding_desc_4'),
+      tint: const Color(0xFFECFDF5),
+      accent: const Color(0xFF10B981),
     ),
     _OnboardPage(
       emoji: '🏆',
-      title: 'Earn Achievements',
+      title: ref.tr('onboarding_title_5'),
       subtitle:
-          'Level up, collect badges, maintain streaks, and become a PhytoLens Legend!',
-      tint: Color(0xFFFEF9C3),
-      accent: Color(0xFFD97706),
+          ref.tr('onboarding_desc_5'),
+      tint: const Color(0xFFFEF9C3),
+      accent: const Color(0xFFD97706),
     ),
   ];
 
@@ -98,7 +100,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 child: TextButton(
                   onPressed: _skip,
                   child: Text(
-                    'Skip',
+                    ref.tr('skip'),
                     style: GoogleFonts.inter(
                       color: AppColors.lightTextMuted,
                       fontSize: 14,

@@ -3,11 +3,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../providers/language_provider.dart';
 import '../../data/crops_dataset.dart';
 import '../../theme/colors.dart';
 import 'dart:ui';
 
-class SupportedCropsScreen extends StatelessWidget {
+class SupportedCropsScreen extends ConsumerWidget {
   const SupportedCropsScreen({super.key});
 
   void _showConditions(BuildContext context, CropData crop) {
@@ -20,14 +22,14 @@ class SupportedCropsScreen extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       backgroundColor: AppColors.backgroundDark,
       appBar: AppBar(
         backgroundColor: AppColors.backgroundDark,
         elevation: 0,
-        title: const Text(
-          'Crop Explorer',
+        title: Text(
+          ref.tr('crop_explorer_title'),
           style: TextStyle(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
@@ -49,14 +51,14 @@ class SupportedCropsScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
             ),
-            child: const Row(
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.info_outline, size: 18, color: AppColors.primaryLight),
-                SizedBox(width: 10),
+                const Icon(Icons.info_outline, size: 18, color: AppColors.primaryLight),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Browse 24 supported crops. Tap a crop to see offline details and what conditions it can detect.',
+                    ref.tr('browse_crops_info'),
                     style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
                   ),
                 ),
@@ -92,14 +94,14 @@ class SupportedCropsScreen extends StatelessWidget {
   }
 }
 
-class _CropCard extends StatelessWidget {
+class _CropCard extends ConsumerWidget {
   final CropData crop;
   final VoidCallback onTap;
 
   const _CropCard({required this.crop, required this.onTap});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -193,7 +195,7 @@ class _CropCard extends StatelessWidget {
                             const Icon(Icons.biotech_rounded, size: 10, color: AppColors.primaryLight),
                             const SizedBox(width: 4),
                             Text(
-                              '${crop.commonDiseases.length} conditions',
+                              ref.tr('conditions_count').replaceAll('{count}', crop.commonDiseases.length.toString()),
                               style: const TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
@@ -215,13 +217,13 @@ class _CropCard extends StatelessWidget {
   }
 }
 
-class _ConditionsBottomSheet extends StatelessWidget {
+class _ConditionsBottomSheet extends ConsumerWidget {
   final CropData crop;
 
   const _ConditionsBottomSheet({required this.crop});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
       child: Container(
@@ -278,7 +280,7 @@ class _ConditionsBottomSheet extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '${crop.commonDiseases.length} detectable conditions',
+                        ref.tr('detectable_conditions_count').replaceAll('{count}', crop.commonDiseases.length.toString()),
                         style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
                       ),
                     ],

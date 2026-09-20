@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import '../../providers/language_provider.dart';
 import '../../providers/scan_limit_provider.dart';
 import '../../providers/ai_limit_provider.dart';
 import '../../providers/user_provider.dart';
@@ -26,6 +27,7 @@ import '../../widgets/glass_button.dart';
 import '../ai/chatbot_screen.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../../data/local_database.dart';
+import '../../services/language_service.dart';
 
 class ResultScreen extends ConsumerStatefulWidget {
   final ScanResult scan;
@@ -83,11 +85,21 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
   }
 
   void _initTts() async {
-    await _tts.setLanguage('en-IN');
+    final langCode = LanguageService().language.code;
+    String ttsLang = 'en-IN';
+    if (langCode == 'hi') {
+      ttsLang = 'hi-IN';
+    } else if (langCode == 'bn') {
+      ttsLang = 'bn-IN';
+    }
+    
+    await _tts.setLanguage(ttsLang);
     await _tts.setSpeechRate(0.45);
     await _tts.setPitch(1.0);
     _tts.setCompletionHandler(() {
-      if (mounted) setState(() => _isSpeaking = false);
+      if (mounted) {
+        setState(() => _isSpeaking = false);
+      }
     });
   }
 
@@ -131,7 +143,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
     }
 
     if (_currentScan.isHealthy) {
-      _aiAdvice = 'Your plant looks healthy and vibrant! Keep providing adequate sunlight, maintain your regular watering routine, and check weekly for pests.';
+      _aiAdvice = ref.tr('healthy_plant_msg');
       _loadingAdvice = false;
       return;
     }
@@ -277,7 +289,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${_currentScan.plantName} added to your Garden! 🌱'),
+            content: Text(ref.tr('added_to_garden_toast').replaceAll('{plant}', _currentScan.plantName)),
             backgroundColor: AppColors.primary,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -289,7 +301,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
         setState(() => _addingToGarden = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Could not add to garden: $e'),
+            content: Text(ref.tr('could_not_add_garden').replaceAll('{error}', e.toString())),
             backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -366,7 +378,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            _isSaved ? 'Saved to Care Log' : 'Syncing to Care Log...',
+                            _isSaved ? ref.tr('saved_to_care_log') : ref.tr('syncing_to_care_log'),
                             style: const TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
@@ -444,7 +456,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
                   children: [
                     Expanded(
                       child: Text(
-                        _currentScan.plantName.isNotEmpty ? _currentScan.plantName : 'Plant Leaf',
+                        _currentScan.plantName.isNotEmpty ? _currentScan.plantName : ref.tr('plant_leaf'),
                         style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w800,
@@ -460,7 +472,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
                           color: AppColors.primary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: const Text('OFFLINE AI', style: TextStyle(fontSize: 9, color: AppColors.primaryDark, fontWeight: FontWeight.bold)),
+                        child: Text(ref.tr('offline_ai'), style: TextStyle(fontSize: 9, color: AppColors.primaryDark, fontWeight: FontWeight.bold)),
                       )
                     else if (_currentScan.aiSource == 'cloud')
                       Container(
@@ -469,7 +481,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
                           color: AppColors.secondary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: const Text('CLOUD AI', style: TextStyle(fontSize: 9, color: AppColors.secondary, fontWeight: FontWeight.bold)),
+                        child: Text(ref.tr('cloud_ai'), style: TextStyle(fontSize: 9, color: AppColors.secondary, fontWeight: FontWeight.bold)),
                       ),
                   ],
                 ),
@@ -500,14 +512,14 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '${(_currentScan.diseaseConfidence * 100).round()}% match confidence',
+                  ref.tr('match_confidence').replaceAll('{confidence}', '${(_currentScan.diseaseConfidence * 100).round()}'),
                   style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
                 ),
                 if (!isHealthy) ...[
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      const Text('Severity:', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                      Text(ref.tr('severity_label'), style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
                       const SizedBox(width: 8),
                       Expanded(
                         child: ClipRRect(
@@ -621,8 +633,8 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
               ),
             )
           else
-            const Text(
-              'No specific treatment needed. Keep maintaining consistent watering and sunlight conditions.',
+            Text(
+              ref.tr('no_treatment_needed'),
               style: TextStyle(
                 fontSize: 13,
                 color: AppColors.textSecondary,
@@ -658,13 +670,13 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
                 color: AppColors.primary,
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.auto_awesome_rounded, size: 18, color: Colors.white),
-                  SizedBox(width: 8),
+                  const Icon(Icons.auto_awesome_rounded, size: 18, color: Colors.white),
+                  const SizedBox(width: 8),
                   Text(
-                    'Ask AI Plant Specialist',
+                    ref.tr('ask_ai_specialist'),
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
@@ -712,7 +724,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
                       ),
                     const SizedBox(width: 8),
                     Text(
-                      _addedToGarden ? 'Added to Your Garden' : 'Add to My Garden',
+                      _addedToGarden ? ref.tr('added_to_garden') : ref.tr('add_to_my_garden'),
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -733,8 +745,8 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 16),
               alignment: Alignment.center,
-              child: const Text(
-                'Back to Plants',
+              child: Text(
+                ref.tr('back_to_plants'),
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -754,6 +766,6 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
         'Health Score: ${_currentScan.healthScore}%\n\n'
         'Check your plants with PhytoLens.';
     // ignore: deprecated_member_use
-    Share.share(text, subject: 'PhytoLens Plant Diagnosis');
+    Share.share(text, subject: ref.tr('share_diagnosis_subject'));
   }
 }

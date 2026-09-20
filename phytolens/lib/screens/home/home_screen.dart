@@ -15,6 +15,7 @@ import '../scanner/camera_screen.dart';
 import '../history/scan_history_screen.dart';
 import '../profile/profile_screen.dart';
 import '../../widgets/bouncing_button.dart';
+import '../../providers/language_provider.dart';
 
 final navIndexProvider = StateProvider<int>((ref) => 0);
 
@@ -71,14 +72,14 @@ class HomeScreen extends ConsumerWidget {
                       color: const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.cloud_off_rounded, size: 14, color: Color(0xFF64748B)),
-                        SizedBox(width: 4),
+                        const Icon(Icons.cloud_off_rounded, size: 14, color: Color(0xFF64748B)),
+                        const SizedBox(width: 4),
                         Text(
-                          'Offline',
-                          style: TextStyle(
+                          ref.tr('offline'),
+                          style: const TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                             color: Color(0xFF64748B),
@@ -174,21 +175,21 @@ class HomeScreen extends ConsumerWidget {
                       _LightNavItem(
                         icon: Icons.yard_outlined,
                         activeIcon: Icons.yard_rounded,
-                        label: 'Plants',
+                        label: ref.tr('nav_plants'),
                         isSelected: idx == 0,
                         onTap: () => ref.read(navIndexProvider.notifier).state = 0,
                       ),
                       _LightNavItem(
                         icon: Icons.filter_center_focus_rounded,
                         activeIcon: Icons.filter_center_focus_rounded,
-                        label: 'Scan',
+                        label: ref.tr('nav_scan'),
                         isSelected: idx == 1,
                         onTap: () => ref.read(navIndexProvider.notifier).state = 1,
                       ),
                       _LightNavItem(
                         icon: Icons.auto_stories_outlined,
                         activeIcon: Icons.auto_stories_rounded,
-                        label: 'Care Log',
+                        label: ref.tr('nav_care_log'),
                         isSelected: idx == 2,
                         onTap: () => ref.read(navIndexProvider.notifier).state = 2,
                       ),

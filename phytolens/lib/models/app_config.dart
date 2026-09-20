@@ -33,6 +33,9 @@ class AppConfig {
   final int trialDays;
   final bool trialEnabled;
 
+  // Maintenance Lockdown Mode
+  final bool maintenanceMode;
+
   const AppConfig({
     this.freeScanLimit = 15,
     this.proScanLimit = 50,
@@ -51,6 +54,7 @@ class AppConfig {
     this.trialPrice = 1.0,
     this.trialDays = 2,
     this.trialEnabled = true,
+    this.maintenanceMode = false,
   });
 
   factory AppConfig.fromPlansAndConfig(List<Map<String, dynamic>> plans, Map<String, dynamic> m) {
@@ -94,6 +98,7 @@ class AppConfig {
       trialPrice: (m['trial_price'] as num?)?.toDouble() ?? 1.0,
       trialDays: parseLimit(m['trial_days'], 2),
       trialEnabled: m['trial_enabled'] as bool? ?? true,
+      maintenanceMode: m['maintenance_mode'] as bool? ?? false,
     );
   }
 

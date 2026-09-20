@@ -17,6 +17,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../providers/user_provider.dart';
+import '../../providers/language_provider.dart';
 import '../../providers/app_config_provider.dart';
 import '../../services/trial_service.dart';
 import '../../widgets/emergency_doctor_pass_sheet.dart';
@@ -126,7 +127,7 @@ class _ScanHistoryScreenState extends ConsumerState<ScanHistoryScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
+              child: Text(ref.tr('cancel'), style: TextStyle(color: AppColors.textMuted)),
             ),
             FilledButton(
               onPressed: () {
@@ -292,8 +293,8 @@ class _ScanHistoryScreenState extends ConsumerState<ScanHistoryScreen> {
         appBar: AppBar(
           backgroundColor: Colors.white,
           elevation: 0,
-          title: const Text(
-            'Care Log & History',
+          title: Text(
+            ref.tr('scan_history_title'),
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w700,
@@ -322,8 +323,8 @@ class _ScanHistoryScreenState extends ConsumerState<ScanHistoryScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Scan History',
+                      Text(
+                        ref.tr('scan_history_title'),
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.w700,
@@ -458,13 +459,13 @@ class _ScanHistoryScreenState extends ConsumerState<ScanHistoryScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Row(
+            content: Row(
               children: [
-                Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
-                SizedBox(width: 12),
+                const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Unable to delete scan. Please check your connection.',
+                    ref.tr('error_deleting'),
                     style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
                   ),
                 ),
@@ -501,7 +502,7 @@ class _ScanHistoryScreenState extends ConsumerState<ScanHistoryScreen> {
           ).animate(onPlay: (c) => c.repeat(reverse: true)).scaleXY(end: 1.05, duration: 3.seconds),
           const SizedBox(height: 24),
           Text(
-            _search.isNotEmpty ? 'No results for "$_search"' : 'No Scans Yet',
+            _search.isNotEmpty ? 'No results for "$_search"' : ref.tr('no_scans_yet'),
             style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w700,
@@ -512,7 +513,7 @@ class _ScanHistoryScreenState extends ConsumerState<ScanHistoryScreen> {
           Text(
             _search.isNotEmpty 
                 ? 'Try a different search term' 
-                : 'Start scanning plants to build your history',
+                : ref.tr('no_scans_subtitle'),
             style: const TextStyle(color: AppColors.lightTextSecondary, fontSize: 14),
           ),
         ],
@@ -521,18 +522,18 @@ class _ScanHistoryScreenState extends ConsumerState<ScanHistoryScreen> {
   }
 }
 
-class _ScanHistoryTile extends StatelessWidget {
+class _ScanHistoryTile extends ConsumerWidget {
   final ScanResult scan;
   final VoidCallback onDelete;
 
   const _ScanHistoryTile({required this.scan, required this.onDelete});
 
-  Future<bool?> _confirmDelete(BuildContext context) async {
+  Future<bool?> _confirmDelete(BuildContext context, WidgetRef ref) async {
     return await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: Colors.white,
-        title: const Text('Delete scan?', style: TextStyle(color: AppColors.lightTextPrimary)),
+        title: Text(ref.tr('delete_scan'), style: TextStyle(color: AppColors.lightTextPrimary)),
         content: Text(
           'This will permanently delete the ${scan.plantName} scan.',
           style: const TextStyle(color: AppColors.lightTextSecondary),
@@ -540,11 +541,11 @@ class _ScanHistoryTile extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.lightTextMuted)),
+            child: Text(ref.tr('cancel'), style: TextStyle(color: AppColors.lightTextMuted)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w700)),
+            child: Text(ref.tr('delete'), style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -552,12 +553,12 @@ class _ScanHistoryTile extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Dismissible(
       key: Key(scan.id),
       direction: DismissDirection.endToStart,
       confirmDismiss: (direction) async {
-        return await _confirmDelete(context);
+        return await _confirmDelete(context, ref);
       },
       onDismissed: (_) => onDelete(),
       background: Container(
@@ -656,7 +657,7 @@ class _ScanHistoryTile extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.delete_outline, color: AppColors.lightTextMuted, size: 22),
               onPressed: () async {
-                final confirm = await _confirmDelete(context);
+                final confirm = await _confirmDelete(context, ref);
                 if (confirm == true) onDelete();
               },
             ),

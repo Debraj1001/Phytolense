@@ -432,7 +432,7 @@ class _ModelManagerScreenState extends State<ModelManagerScreen> {
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          '• Model: TinyLlama 1.1B (${_llmService.modelSizeLabel})\n'
+                          '• Model: Llama 3.2 1B Instruct (${_llmService.modelSizeLabel})\n'
                           '• Downloads can be paused and resumed\n'
                           '• Works completely without internet once downloaded\n'
                           '• Personalized with your scan history & profile',

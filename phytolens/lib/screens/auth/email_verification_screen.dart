@@ -2,6 +2,8 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../providers/language_provider.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -12,15 +14,15 @@ import '../../theme/colors.dart';
 import '../../widgets/loading_dots.dart';
 import '../subscription/trial_activation_screen.dart';
 
-class EmailVerificationScreen extends StatefulWidget {
+class EmailVerificationScreen extends ConsumerStatefulWidget {
   final String email;
   const EmailVerificationScreen({super.key, required this.email});
 
   @override
-  State<EmailVerificationScreen> createState() => _EmailVerificationScreenState();
+  ConsumerState<EmailVerificationScreen> createState() => _EmailVerificationScreenState();
 }
 
-class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
+class _EmailVerificationScreenState extends ConsumerState<EmailVerificationScreen> {
   final _auth = AuthService();
   final _codeController = TextEditingController();
   final _focusNode = FocusNode();
@@ -82,7 +84,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
   Future<void> _verifyOtp([String? explicitCode]) async {
     final code = (explicitCode ?? _codeController.text).trim();
     if (code.length < 6) {
-      setState(() => _error = 'Please enter the verification code');
+      setState(() => _error = ref.tr('please_enter_verification_code'));
       return;
     }
 
@@ -110,7 +112,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
     } catch (e) {
       debugPrint('OTP Verification error: $e');
       setState(() {
-        _error = 'Invalid or expired code. Please check your email or resend.';
+        _error = ref.tr('invalid_expired_code');
       });
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -131,7 +133,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
       _focusNode.requestFocus();
       _startCountdown();
       setState(() {
-        _infoMsg = 'A fresh verification code has been sent to your email.';
+        _infoMsg = ref.tr('fresh_code_sent');
       });
     } catch (e) {
       setState(() {
@@ -177,7 +179,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.lightTextPrimary, size: 20),
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.lightTextPrimary, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -187,7 +189,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
 
               // Soft Botanical Icon Container
               Container(
@@ -204,18 +206,18 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                     ),
                   ],
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.mark_email_read_rounded,
                   color: AppColors.primary,
                   size: 34,
                 ),
               ).animate().scale(duration: 400.ms, curve: Curves.easeOutBack),
 
-              const SizedBox(height: 24),
+              SizedBox(height: 24),
 
               // Title & Subtitle
               Text(
-                'Verify Your Email',
+                ref.tr('verify_your_email'),
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 26,
                   fontWeight: FontWeight.w800,
@@ -224,17 +226,17 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                 ),
               ).animate().fadeIn(delay: 100.ms),
 
-              const SizedBox(height: 8),
+              SizedBox(height: 8),
 
               Text(
-                'We sent a verification code to:',
+                ref.tr('sent_code_to'),
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   color: AppColors.lightTextSecondary,
                 ),
               ).animate().fadeIn(delay: 120.ms),
 
-              const SizedBox(height: 4),
+              SizedBox(height: 4),
 
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -252,7 +254,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                 ),
               ).animate().fadeIn(delay: 150.ms),
 
-              const SizedBox(height: 36),
+              SizedBox(height: 36),
 
               // Bulletproof Unified OTP Digit Input (Single Controller)
               Stack(
@@ -327,16 +329,16 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                 ],
               ).animate().fadeIn(delay: 200.ms),
 
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
 
               // Paste Button
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton.icon(
                   onPressed: _pasteFromClipboard,
-                  icon: const Icon(Icons.paste_rounded, size: 16, color: AppColors.primary),
+                  icon: Icon(Icons.paste_rounded, size: 16, color: AppColors.primary),
                   label: Text(
-                    'Paste Code',
+                    ref.tr('paste_code'),
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -346,7 +348,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                 ),
               ),
 
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
 
               if (_error != null) ...[
                 Container(
@@ -358,8 +360,8 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.error_outline_rounded, color: AppColors.lightError, size: 18),
-                      const SizedBox(width: 8),
+                      Icon(Icons.error_outline_rounded, color: AppColors.lightError, size: 18),
+                      SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           _error!,
@@ -372,7 +374,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                     ],
                   ),
                 ).animate().fadeIn().shake(),
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
               ],
 
               if (_infoMsg != null) ...[
@@ -385,8 +387,8 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.check_circle_outline_rounded, color: AppColors.primaryDark, size: 18),
-                      const SizedBox(width: 8),
+                      Icon(Icons.check_circle_outline_rounded, color: AppColors.primaryDark, size: 18),
+                      SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           _infoMsg!,
@@ -400,10 +402,10 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                     ],
                   ),
                 ).animate().fadeIn(),
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
               ],
 
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
 
               // Verify Button
               SizedBox(
@@ -420,7 +422,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                   child: _loading
                       ? const ButtonDots()
                       : Text(
-                          'Verify Code & Continue',
+                          ref.tr('verify_code_continue'),
                           style: GoogleFonts.inter(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
@@ -429,14 +431,14 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                 ),
               ).animate().fadeIn(delay: 250.ms),
 
-              const SizedBox(height: 24),
+              SizedBox(height: 24),
 
               // Resend / Countdown Row
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    "Didn't receive the email? ",
+                    ref.tr('didnt_receive_email'),
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       color: AppColors.lightTextMuted,
@@ -456,7 +458,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                       onPressed: _loading ? null : _resendCode,
                       style: TextButton.styleFrom(padding: EdgeInsets.zero),
                       child: Text(
-                        'Resend Code',
+                        ref.tr('resend_code'),
                         style: GoogleFonts.inter(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
@@ -467,13 +469,13 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                 ],
               ),
 
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
 
               TextButton.icon(
                 onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.lightTextSecondary),
+                icon: Icon(Icons.edit_outlined, size: 16, color: AppColors.lightTextSecondary),
                 label: Text(
-                  'Change Email Address',
+                  ref.tr('change_email'),
                   style: GoogleFonts.inter(
                     fontSize: 13,
                     color: AppColors.lightTextSecondary,
@@ -482,7 +484,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                 ),
               ),
 
-              const SizedBox(height: 32),
+              SizedBox(height: 32),
             ],
           ),
         ),
