@@ -25,23 +25,36 @@ export default function QrDownloadSection() {
   const [svgMarkup, setSvgMarkup] = useState('');
   const [copied, setCopied] = useState(false);
 
-  // Active verified download link
+  // Active verified download links from Supabase Realtime appConfig
   const androidUrl = appConfig?.download_url_android || OFFICIAL_APK_DOWNLOAD_URL;
+  const playStoreUrl = appConfig?.download_url_playstore || 'https://play.google.com/store/apps/details?id=com.phytolens.app';
+  const iosUrl = appConfig?.download_url_ios || 'https://testflight.apple.com/join/phytolens';
+  const webUrl = appConfig?.download_url_web || 'https://phytolens.agritech.org';
   const githubReleaseUrl = appConfig?.download_url_github_release || OFFICIAL_GITHUB_RELEASE_URL;
 
-  // Primary target for QR code: always the direct APK download so scanning immediately triggers installation
-  const qrTarget = androidUrl;
+  // Dynamic QR Code Settings from Database Realtime
+  const qrTarget = appConfig?.qr_primary_target === 'playstore' 
+    ? playStoreUrl 
+    : appConfig?.qr_primary_target === 'ios'
+    ? iosUrl
+    : appConfig?.qr_primary_target === 'web'
+    ? webUrl
+    : androidUrl;
 
+  const qrColor = appConfig?.qr_foreground_color || '#008f5d';
+  const qrErrorCorrection = appConfig?.qr_error_correction || 'M';
+  const qrLogoEnabled = appConfig?.qr_logo_enabled !== false;
+
+  // Re-generate SVG whenever any admin QR configuration changes in realtime
   useEffect(() => {
     if (!qrTarget) return;
 
-    // Render clean, high-contrast, camera-readable QR code
     QRCode.toString(qrTarget, {
       type: 'svg',
-      errorCorrectionLevel: 'M',
-      margin: 2,
+      errorCorrectionLevel: qrErrorCorrection,
+      margin: 1,
       color: {
-        dark: '#0F172A',
+        dark: qrColor,
         light: '#FFFFFF'
       }
     }, (err, svgString) => {
@@ -49,7 +62,7 @@ export default function QrDownloadSection() {
         setSvgMarkup(svgString);
       }
     });
-  }, [qrTarget]);
+  }, [qrTarget, qrColor, qrErrorCorrection]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(qrTarget);
@@ -111,7 +124,7 @@ export default function QrDownloadSection() {
             gap: '36px',
             alignItems: 'center'
           }}>
-            {/* Left: 100% Camera-Scannable QR Code */}
+            {/* Left: Dynamic Real-Time Scannable QR Code */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
               <div 
                 style={{
@@ -130,11 +143,31 @@ export default function QrDownloadSection() {
                 onClick={() => setQrZoomModalOpen(true)}
                 title="Click to open Lossless Zoom & High-Res Export"
               >
-                {/* Crisp Vector SVG QR Code with no central obstruction */}
+                {/* Crisp Vector SVG QR Code with Dynamic Color */}
                 <div 
                   style={{ width: '220px', height: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                   dangerouslySetInnerHTML={{ __html: svgMarkup }}
                 />
+
+                {/* Dynamic Central Leaf Logo Badge matching Admin setting */}
+                {qrLogoEnabled && (
+                  <div style={{
+                    position: 'absolute',
+                    width: '38px',
+                    height: '38px',
+                    backgroundColor: qrColor || 'var(--primary)',
+                    borderRadius: '50%',
+                    border: '2.5px solid #FFFFFF',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '18px',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
+                    pointerEvents: 'none'
+                  }}>
+                    🌿
+                  </div>
+                )}
 
                 {/* Top Floating Badge */}
                 <div style={{
@@ -150,7 +183,11 @@ export default function QrDownloadSection() {
                   borderRadius: '12px',
                   boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
                 }}>
-                  Direct APK Target
+                  {appConfig?.qr_primary_target === 'playstore' 
+                    ? 'Play Store Target' 
+                    : appConfig?.qr_primary_target === 'ios'
+                    ? 'iOS Target'
+                    : 'Direct APK Target'}
                 </div>
               </div>
 
@@ -333,7 +370,9 @@ export default function QrDownloadSection() {
                 backgroundColor: 'var(--bg-subtle)',
                 borderRadius: 'var(--radius-md)',
                 border: 'var(--border-width-sm) solid var(--border-color)',
-                fontSize: '11.5px'
+                fontSize: '11.5px',
+                width: '100%',
+                boxSizing: 'border-box'
               }}>
                 <span style={{
                   fontFamily: 'var(--font-mono)',
@@ -341,7 +380,8 @@ export default function QrDownloadSection() {
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
-                  flex: 1
+                  flex: 1,
+                  minWidth: 0
                 }}>
                   {qrTarget}
                 </span>
@@ -350,7 +390,7 @@ export default function QrDownloadSection() {
                   onClick={handleCopy}
                   className="btn btn-white btn-sm"
                   style={{ padding: '4px 10px', fontSize: '11px', flexShrink: 0 }}
-                  title="Copy direct APK download URL"
+                  title="Copy active download URL"
                 >
                   {copied ? <Check size={13} color="var(--primary-dark)" /> : <Copy size={13} />}
                   <span>{copied ? 'Copied' : 'Copy'}</span>

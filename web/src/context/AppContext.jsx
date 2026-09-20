@@ -14,6 +14,7 @@ import {
   fetchScansList,
   fetchPaymentsList,
   authenticateAdmin,
+  supabase,
   supabaseAdmin,
   DESIGNATED_ADMIN_EMAIL,
   DESIGNATED_ADMIN_UID
@@ -88,9 +89,9 @@ export function AppProvider({ children }) {
   useEffect(() => {
     loadData();
 
-    // ─── Realtime Subscriptions for Admin Portal ─────────────────────────────
-    const configChannel = supabaseAdmin
-      .channel('admin_realtime_config')
+    // ─── Realtime Subscriptions for Admin Portal & Public Pages ────────────
+    const configChannel = supabase
+      .channel('public_realtime_config')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'app_config' },
@@ -165,7 +166,7 @@ export function AppProvider({ children }) {
       .subscribe();
 
     return () => {
-      supabaseAdmin.removeChannel(configChannel);
+      supabase.removeChannel(configChannel);
       supabaseAdmin.removeChannel(usersChannel);
       supabaseAdmin.removeChannel(aiUsageChannel);
       supabaseAdmin.removeChannel(scansChannel);
