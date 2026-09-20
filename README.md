@@ -9,15 +9,19 @@
 [![Firebase](https://img.shields.io/badge/Cloud-Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)](https://firebase.google.com)
 [![Gemini](https://img.shields.io/badge/AI-Google_Gemini-8E75C2?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
 [![Groq](https://img.shields.io/badge/LLM-Groq_Llama_3-F55036?style=for-the-badge)](https://groq.com)
+[![Razorpay](https://img.shields.io/badge/Payments-Razorpay-0C2340?style=for-the-badge&logo=razorpay&logoColor=white)](https://razorpay.com)
+[![SQLite](https://img.shields.io/badge/Offline-SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org)
 
-**An intelligent, multi-provider botanical assistant that diagnoses plant diseases, identifies 82,000+ species, and delivers actionable organic remedies in seconds.**
+**An intelligent, multi-provider agronomic assistant that diagnoses plant pathologies, tracks local outbreaks, provides optimal spray windows, and connects farmers with nearby verified retailers.**
 
 [Overview](#-overview) •
-[Features](#-key-features) •
-[Architecture](#-system-architecture) •
+[Key Features](#-key-features) •
+[System Architecture](#-system-architecture) •
+[Ecosystem Workflow](#-ecosystem-workflow) •
 [Project Structure](#-project-structure) •
 [Getting Started](#-getting-started) •
-[Environment Configuration](#-environment-configuration)
+[Environment Configuration](#-environment-configuration) •
+[Security & Best Practices](#-security--best-practices)
 
 </div>
 
@@ -25,33 +29,52 @@
 
 ## 🌿 Overview
 
-**PhytoLens** empowers farmers, botanists, and indoor gardeners to instantly diagnose plant pathologies and track plant wellness. Combining on-device machine learning with high-throughput cloud vision models (Gemini Vision multi-key auto-rotation pool, PlantNet API, and Groq ultra-fast LLMs), PhytoLens delivers accurate diagnosis, severity scoring, and step-by-step chemical/organic treatment roadmaps.
+**PhytoLens** is a mobile health intelligence platform built for farmers, agronomists, and gardeners. It bridges the gap between digital crop disease diagnosis and physical remedy implementation.
 
-Designed with a **Soft Botanical Minimalist** UI/UX philosophy, featuring calm sage-emerald hues, feather-soft elevation shadows, fluid animations, and Google Fonts typography.
+Combining on-device machine learning with high-throughput cloud vision models (multi-key Gemini Vision pool, PlantNet species identification, and Groq ultra-fast LLMs), PhytoLens delivers instant pathology identification, severity grading, step-by-step organic/chemical treatment protocols, real-time community epidemic tracking, and direct links to certified agro-dealers.
+
+Designed with a **Soft Botanical Minimalist** design system, featuring emerald and mint hues, tactile bouncing interactions, dark/light adaptive theming, fluid micro-animations, and offline-first database synchronization.
 
 ---
 
 ## ✨ Key Features
 
 ### 🔍 Multimodal AI Disease Diagnosis & Species ID
-- **Multi-Key Vision Auto-Rotation**: Resilient multi-key Gemini Vision pool that seamlessly rotates through fallback keys upon hitting rate limits.
-- **Rapid Agronomic Advice**: Powered by Groq LLM to generate instant remediation protocols, organic home remedies, chemical treatments, and preventive measures.
-- **Extensive Botanical Library**: PlantNet API integration for recognizing over 82,000 plant species across global flora.
-- **On-Device Inference**: TensorFlow Lite (`tflite_flutter`) for rapid, low-latency offline plant health verification.
+- **Multi-Key Vision Auto-Rotation Pool**: Resilient multi-key Gemini Vision integration that automatically fails over across backup keys upon hitting provider rate limits.
+- **82,000+ Plant Species Identification**: Powered by the PlantNet API for botanical taxonomy and species classification across global flora.
+- **On-Device Edge Inference**: Integrated TensorFlow Lite (`tflite_flutter`) and ONNX runtime support for low-latency offline diagnosis without internet connectivity.
+- **Automated Agronomic Protocols**: Rapid curative prescriptions via Groq LLM detailing exact chemical active ingredients, mixing ratios, application precautions, and organic homemade alternatives.
 
-### 📱 Premium Soft Botanical UI / UX
-- **Calm, High-Readability Palette**: Sage green (`#2E7D5B`), crisp card surfaces (`#FFFFFF`), soft borders, and warm muted typography.
-- **Modern Typography**: Typography system driven by `Plus Jakarta Sans` and `Inter`.
-- **Delightful Micro-interactions**: Pulsing scanning crosshairs, skeleton shimmer placeholders, and smooth transitions.
+### 🩺 Emergency Doctor Pass (₹10 Micropayment)
+- **Low-Barrier Urgent Access**: Provides a 24-hour high-priority consultation pass for farmers facing sudden, severe crop failure without requiring long-term subscriptions.
+- **Priority Agronomist Queue**: Bypasses daily free limits and opens deep-dive interactive chat sessions with the AI Plant Doctor.
+- **Automated Razorpay Checkout**: Seamless in-app micro-transaction flow that activates 1-day Pro benefits and opens the emergency consultation session immediately upon confirmation.
 
-### 🛡️ Garden Management & Care Routines
-- **Scan History**: Full historical log of all past diagnoses, timestamps, confidence scores, and disease stages.
-- **Care Reminders**: Automated background reminders for watering, fertilization, pruning, and health re-checks via `flutter_local_notifications`.
-- **Plant Profile Vault**: Save individual plants, track recovery progress, and maintain health journals.
+### 📡 Community Radar (Epidemic Early Warning)
+- **Localized Disease Tracking**: Monitors crowdsourced crop diagnoses within a 10 km geographic radius to detect outbreaks early (e.g., Late Blight, Downy Mildew).
+- **Preventative Action Prompts**: Notifies neighboring growers before airborne or pest-borne pathogens reach their fields, allowing preventative bio-sprays.
 
-### 💳 Tiered Subscriptions & Scan Management
-- **Scan Limiter Engine**: Smart quota management system tracking free vs. premium scan allowances.
-- **Razorpay Payments**: Built-in support for subscription upgrades (Free, Pro, and Premium tiers) with real-time tier unlocking.
+### 🌦️ Weather & Optimal Spray Window
+- **Atmospheric Spray Advisory**: Evaluates live temperature, humidity, wind velocity, and precipitation probability to calculate whether spraying conditions are **Optimal** or **Not Ideal**.
+- **Runoff & Evaporation Prevention**: Prevents wasted chemical investments by warning against spraying before rain or in strong winds.
+
+### 🏪 Nearby Retailers (B2B Directory)
+- **Closing the Remedy Loop**: Connects diagnosed pathology prescriptions directly to local agricultural input centers and fertilizer suppliers.
+- **Verified Dealer Roster**: Displays store addresses, ratings, and one-tap direct calling (`tel:`) to check product availability immediately.
+- **B2B Agricultural Commerce**: Enables certified distributors to list genuine inputs, protecting growers against counterfeit pesticides.
+
+### 🌿 Garden Roster & Multi-Plot Management
+- **Plot & Crop History**: Full historical log of past scans, severity percentages, recovery stages, and confidence scores.
+- **Plant Profile Vault**: Maintain custom digital gardens, track watering schedules, and monitor healing progress over time.
+- **Voice Read-Aloud**: Integrated Text-to-Speech (`flutter_tts`) reads treatment recipes and dosage instructions aloud in field conditions.
+
+### 💾 Offline-First Architecture
+- **SQLite Local Database (`sqflite`)**: Caches scans, garden profiles, and stats locally so the app remains fully functional without cell towers.
+- **Auto-Sync Engine**: Queues actions taken in offline mode and synchronizes with Supabase PostgreSQL as soon as connectivity is restored.
+
+### 💳 Tiered Subscriptions & Quota Management
+- **Flexible Plans**: Free tier with daily scan quotas, Pro Plan, and Farm Pack.
+- **Payment Verification**: Secure payment verification through Supabase Edge Functions with Razorpay integration.
 
 ---
 
@@ -59,66 +82,93 @@ Designed with a **Soft Botanical Minimalist** UI/UX philosophy, featuring calm s
 
 ```mermaid
 graph TD
-    User([User with Mobile App]) -->|Captures Photo| Cam[Camera / Image Picker]
+    User([Farmer / Gardener]) -->|Captures Leaf Photo| Cam[Camera / Viewfinder]
     Cam --> ScanEngine[Scan Limiter & Quota Gate]
     
     subgraph AI Pipeline
-        ScanEngine --> FallbackRouter{AI Router}
-        FallbackRouter -->|Fast Vision & Pathology| GemPool[Gemini Vision Multi-Key Pool]
-        FallbackRouter -->|Taxonomy & Species Match| PlantNet[PlantNet API]
-        FallbackRouter -->|Offline Detection| TFLite[On-Device TFLite Model]
+        ScanEngine --> AIRouter{AI Routing Engine}
+        AIRouter -->|Online Vision & Pathology| GemPool[Gemini Vision Multi-Key Pool]
+        AIRouter -->|Botanical Taxonomy| PlantNet[PlantNet API]
+        AIRouter -->|Offline On-Device| TFLite[TFLite / ONNX Runtime]
         
-        GemPool --> GroqEngine[Groq LLM Engine]
+        GemPool --> GroqEngine[Groq LLaMA-3 Agronomy Engine]
         PlantNet --> GroqEngine
         TFLite --> GroqEngine
-        GroqEngine -->|Structured Diagnosis & Care Plan| DiagnosticResult[Scan Result Model]
-    end
-    
-    subgraph Identity & Messaging Layer
-        User -->|Authentication Gateway| FirebaseAuth[Firebase Auth]
-        DiagnosticResult --> NotifService[Firebase Cloud Messaging & Local Reminders]
+        GroqEngine -->|Structured Diagnosis & Prescription| DiagnosticResult[Scan Result Model]
     end
 
-    subgraph Data & Storage Layer
-        DiagnosticResult --> SupabaseDB[(Supabase PostgreSQL: users, scan_history, plants, payments, config)]
-        Cam -->|Upload Scan Images| SupabaseStorage[(Supabase Storage: scans & avatars buckets)]
+    subgraph Field Intelligence & Assistance
+        DiagnosticResult --> SprayWindow[Weather Service: Spray Window]
+        DiagnosticResult --> RadarAlert[Community Radar: Outbreak Telemetry]
+        DiagnosticResult --> DoctorPass[Emergency Doctor Pass ₹10]
+        DiagnosticResult --> B2BDirectory[Nearby Retailers B2B Directory]
     end
 
-    subgraph Administration
-        AdminUser([Admin]) --> AdminPortal[Phytolens Admin Web/App]
-        AdminPortal -->|Live Config, Moderation & Quotas| SupabaseDB
+    subgraph Data & Sync Layer
+        DiagnosticResult --> LocalDB[(SQLite Local Database)]
+        LocalDB <-->|Bidirectional Sync| SupabaseDB[(Supabase PostgreSQL: users, scans, plants, payments)]
+        Cam -->|Image Upload| SupabaseStorage[(Supabase Storage: scans bucket)]
     end
+
+    subgraph Identity & Notifications
+        User -->|Authentication| SupabaseAuth[Supabase Auth / Firebase Auth]
+        DiagnosticResult --> NotifService[FCM & Local Reminders]
+    end
+```
+
+---
+
+## 🔄 Ecosystem Workflow
+
+```mermaid
+graph LR
+    A[1. Community Radar alerts nearby outbreak] --> B[2. Farmer scans crop via PhytoLens Camera]
+    B --> C[3. Multi-Engine AI returns diagnosis & severity]
+    C --> D[4. Weather service checks optimal spray window]
+    C --> E[5. Emergency Doctor Pass provides 1-on-1 guidance]
+    C --> F[6. B2B Directory connects farmer to local input retailer]
 ```
 
 ---
 
 ## 📂 Project Structure
 
-This monorepo contains both the primary mobile application and the administrative control dashboard:
-
 ```
 Plant-life/
-├── phytolens/                   # 📱 Primary Flutter Mobile Application
-│   ├── android/                 # Native Android configuration & Gradle build
-│   ├── ios/                     # Native iOS workspace & Pods
-│   ├── assets/                  # Icons, illustrations, ML models (.tflite, labels)
+├── phytolens/                       # 📱 Primary Flutter Mobile Application
+│   ├── android/                     # Native Android build & Gradle configuration
+│   ├── ios/                         # Native iOS build configuration & Pods
+│   ├── assets/
+│   │   ├── images/                  # Botanical vectors, illustrations, icons
+│   │   ├── animations/              # Lottie animations & micro-interactions
+│   │   ├── models/                  # On-device ML models (.tflite, .onnx)
+│   │   └── data/                    # Offline agronomy knowledge base (JSON)
 │   ├── lib/
-│   │   ├── config/              # App constants, routes, API endpoints
-│   │   ├── data/                # Mock data, plant repositories
-│   │   ├── models/              # Data models (ScanResult, User, Plant, Subscription)
-│   │   ├── providers/           # Riverpod state management providers
-│   │   ├── screens/             # UI screens
-│   │   │   ├── auth/            # Login, Sign Up, Password Reset
-│   │   │   ├── dashboard/       # Soft Botanical Home & Quick Actions
-│   │   │   ├── scanner/         # Camera Viewfinder & Realtime Analysis
-│   │   │   ├── history/         # Diagnostic Records & Filtering
-│   │   │   ├── profile/         # User Settings & Garden Roster
-│   │   │   └── subscription/    # Upgrade & Razorpay Checkout
-│   │   ├── services/            # Gemini, Groq, Supabase, Limiter, Notifications
-│   │   ├── theme/               # Colors, Typography, AppTheme (Light & Dark)
-│   │   └── widgets/             # Reusable cards, buttons, shimmers, badges
-│   ├── pubspec.yaml             # Mobile dependencies & assets
-│   └── .env.example             # Mobile environment variable template
+│   │   ├── config/                  # App constants, routes, environment config
+│   │   ├── data/                    # Agronomy knowledge base & SQLite local database
+│   │   ├── models/                  # AppUser, ScanResult, Plant, AppConfig models
+│   │   ├── providers/               # Riverpod state management & quota providers
+│   │   ├── screens/
+│   │   │   ├── ai/                  # AI Doctor Interactive Chatbot
+│   │   │   ├── auth/                # Login, Signup, Email Verification
+│   │   │   ├── business/            # Nearby Retailers (B2B) Directory
+│   │   │   ├── dashboard/           # Home Dashboard, Radar & Status Cards
+│   │   │   ├── history/             # Scan History, Diagnostics & Analytics
+│   │   │   ├── home/                # Bottom Navigation Shell
+│   │   │   ├── onboarding/          # User Welcome & Permissions Flow
+│   │   │   ├── profile/             # Profile, Garden Roster & Plant Details
+│   │   │   ├── scanner/             # Live Camera Viewfinder & Result Screen
+│   │   │   ├── settings/            # Settings & On-Device Model Manager
+│   │   │   ├── splash/              # Animated Brand Launch Screen
+│   │   │   └── subscription/        # Upgrade, Trial Activation & Transformation
+│   │   ├── services/                # Supabase, Gemini, Groq, Weather, Payment, ML
+│   │   ├── theme/                   # Dual-Theme (Dark/Light), Colors & Typography
+│   │   └── widgets/                 # EmergencyDoctorPassSheet, BouncingButton, Cards
+│   ├── pubspec.yaml                 # Dependencies & asset declarations
+│   └── .env.example                 # Environment variables template
+├── .gitignore                       # Ignored build outputs and secret keys
+├── LICENSE                          # MIT License
+└── README.md                        # Documentation & setup guide
 ```
 
 ---
@@ -129,10 +179,11 @@ Plant-life/
 
 - [Flutter SDK](https://flutter.dev/docs/get-started/install) (`>= 3.0.0`)
 - [Dart SDK](https://dart.dev/get-dart) (`>= 3.0.0 < 4.0.0`)
-- Android Studio / Xcode (for mobile device emulation)
-- A Supabase Project & Firebase Project
+- Android Studio / VS Code with Flutter extension
+- Connected physical Android/iOS device or emulator
+- Supabase Project & Firebase Project
 
-### Installation
+### Installation & Run
 
 1. **Clone the repository:**
    ```bash
@@ -140,19 +191,36 @@ Plant-life/
    cd Phytolense
    ```
 
-2. **Configure Mobile App (`phytolens`):**
+2. **Navigate to the application directory:**
    ```bash
    cd phytolens
-   cp .env.example .env
-   # Populate your API keys in .env
+   ```
+
+3. **Install dependencies:**
+   ```bash
    flutter pub get
+   ```
+
+4. **Configure environment variables:**
+   ```bash
+   cp .env.example .env
+   # Edit .env and supply your credentials (see below)
+   ```
+
+5. **Run on your connected device:**
+   ```bash
+   # List connected devices
+   flutter devices
+
+   # Run on selected device
+   flutter run
    ```
 
 ---
 
 ## 🔑 Environment Configuration
 
-Create a `.env` file in the `phytolens/` directory using the provided `.env.example`:
+Create a `.env` file in the `phytolens/` root directory using `.env.example`:
 
 ```ini
 # Supabase Configuration
@@ -161,42 +229,36 @@ SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_KEY=your_supabase_service_role_key
 SUPABASE_DB_URL=https://your-project.supabase.co
 
-# Razorpay Keys (Test Mode)
+# Razorpay Keys (Test / Live Mode)
 RAZORPAY_TEST_KEY_ID=rzp_test_xxxxxxxxxxxxxx
 RAZORPAY_TEST_KEY_SECRET=your_razorpay_secret
 
-# Groq API (Primary + Secondary Fallback)
+# Groq API (Primary + Fallback Pool)
 GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 GROQ_API_KEY_2=gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
-# PlantNet API
+# PlantNet API (82,000+ species taxonomy)
 PLANTNET_API_KEY=your_plantnet_api_key
 
-# Gemini Vision API Keys (Multi-Key Failover Pool)
+# Gemini Vision API Keys (Multi-Key Pool with Auto-Rotation)
 GEMINI_API_KEY=AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 GEMINI_API_KEY_2=AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 GEMINI_API_KEY_3=AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 GEMINI_API_KEY_4=AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 GEMINI_API_KEY_5=AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-```
 
----
-
-## 🏃 Running the Application
-
-### Running Mobile App (Android / iOS)
-```bash
-cd phytolens
-flutter run
+# Direct Database Connection String (Optional)
+DATABASE_URL=postgresql://postgres:password@db.your-project.supabase.co:5432/postgres
 ```
 
 ---
 
 ## 🔒 Security & Best Practices
 
-- **Never commit `.env` files**: All secret keys and database URLs are ignored via `.gitignore`.
-- **API Key Pool Failover**: Avoids single-point-of-failure outages during hackathons or heavy usage spikes.
-- **Client-Side Sanitization**: Image payloads are compressed and resized before transmission to reduce bandwidth and inference latency.
+- **Never Commit Secrets**: `.env` and sensitive credential files (`google-services.json`, keystores) are excluded via `.gitignore`.
+- **Multi-Key API Resiliency**: Gemini Vision keys auto-rotate upon receiving HTTP 429 (Rate Limit) or 503 errors, ensuring 99.9% uptime.
+- **Client-Side Image Optimization**: Images are automatically compressed and resized before transmission to minimize mobile data usage.
+- **Offline Data Integrity**: Scans and treatments are backed up to local SQLite storage with checksums to prevent data loss in remote areas.
 
 ---
 
