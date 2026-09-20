@@ -124,14 +124,15 @@ export async function fetchAppConfig() {
       trial_price: 1,
       trial_days: 2,
       trial_enabled: true,
-      download_url_android: 'https://github.com/Debraj1001/Phytolense/releases/latest/download/phytolens-release.apk',
+      download_url_android: 'https://github.com/Debraj1001/Phytolense/releases/download/v1.0.0/phytolens-v1.0.0.apk',
+      download_url_github_release: 'https://github.com/Debraj1001/Phytolense/releases/tag/v1.0.0',
       download_url_playstore: 'https://play.google.com/store/apps/details?id=com.phytolens.app',
       download_url_ios: 'https://testflight.apple.com/join/phytolens',
       download_url_web: 'https://phytolens.agritech.org',
       qr_primary_target: 'android',
       qr_foreground_color: '#0F172A',
-      qr_error_correction: 'H',
-      qr_logo_enabled: true
+      qr_error_correction: 'M',
+      qr_logo_enabled: false
     };
   }
 }
