@@ -344,27 +344,31 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
             Text(limit.isNotStarted ? '🌱' : (limit.isExpired ? '🥀' : '⏳'), style: const TextStyle(fontSize: 40)),
             const SizedBox(height: 16),
             Text(
-              limit.remaining <= 0
-                  ? 'Daily Scan Limit Reached'
-                  : (limit.isNotStarted ? '${cfg.trialDays}-Day Pro Trial Available' : 'Daily Scan Limit Reached'),
-              style: const TextStyle(
+              limit.isExpired
+                  ? 'Free Trial Concluded'
+                  : (limit.isNotStarted
+                      ? 'Start ${cfg.trialDays}-Day Free Trial'
+                      : 'Daily Scan Limit Reached'),
+              style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
-                color: AppColors.warning,
+                color: limit.isExpired ? AppColors.error : AppColors.warning,
               ),
             ),
             const SizedBox(height: 12),
             Text(
-              limit.remaining <= 0
-                  ? (limit.isNotStarted
-                      ? 'You\'ve reached your free daily limit of ${limit.limit} scans. Activate your ${cfg.trialDays}-Day Pro Trial for ₹${cfg.trialPrice.toInt()} to unlock ${cfg.proScanLabel} scans, or wait until midnight.'
-                      : 'You\'ve reached your daily scan limit of ${limit.limit} scans on the ${limit.tier} plan. Resets at midnight, or upgrade for higher allowances.')
-                  : 'Upgrade your plan for higher daily allowances.',
+              limit.isExpired
+                  ? 'Your ${cfg.trialDays}-day Free Trial has ended. There is no permanent free tier. Upgrade to Pro (${cfg.proPrice}/mo) or Farm Pack (${cfg.farmPrice}/mo) to continue scanning plants.'
+                  : (limit.isNotStarted
+                      ? 'Activate your ${cfg.trialDays}-Day Free Trial to enjoy ${limit.limit} AI leaf scans per day, remedies, and treatment guides.'
+                      : 'You\'ve reached your daily limit of ${limit.limit} scans on your plan. Resets at midnight, or upgrade for higher daily allowances.'),
               style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.4),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 16),
-            const _MidnightCountdownText(),
+            if (!limit.isExpired) ...[
+              const SizedBox(height: 16),
+              const _MidnightCountdownText(),
+            ],
             const SizedBox(height: 24),
             FilledButton.icon(
               icon: Icon(limit.isNotStarted ? Icons.stars_rounded : Icons.flash_on_rounded, size: 18),
@@ -388,9 +392,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9999)),
               ),
               label: Text(
-                limit.isNotStarted
-                    ? 'Activate ${cfg.trialDays}-Day Trial (₹${cfg.trialPrice.toInt()})'
-                    : (limit.isExpired ? 'Upgrade Plan — From ${cfg.proPrice}/mo' : 'Upgrade Plan'),
+                limit.isExpired
+                    ? 'Upgrade to Pro or Farm'
+                    : (limit.isNotStarted ? 'Start Free Trial' : 'Upgrade Plan'),
                 style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
               ),
             ),
@@ -755,12 +759,16 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
 
   // ── Helper methods for clean scan limit display ────────────────────────
   Color _getLimitColor(ScanLimitResult limit) {
+    if (limit.isExpired) return AppColors.lightError;
+    if (limit.isNotStarted) return AppColors.primary;
     if (limit.isUnlimited) return AppColors.primary;
     if (limit.remaining > 0) return AppColors.lightSuccess;
     return AppColors.lightError;
   }
 
   String _getLimitText(ScanLimitResult limit) {
+    if (limit.isExpired) return 'Trial Ended';
+    if (limit.isNotStarted) return 'Start Trial';
     if (limit.isUnlimited) return '∞ Unlimited';
     return '${limit.remaining}/${limit.limit} left';
   }

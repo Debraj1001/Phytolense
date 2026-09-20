@@ -681,6 +681,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final String scanRemainingStr;
     if (scanLimit == null) {
       scanRemainingStr = '--';
+    } else if (isExpired) {
+      scanRemainingStr = 'Trial Ended';
     } else if (scanLimit.isUnlimited) {
       scanRemainingStr = 'Unlimited';
     } else {
@@ -690,6 +692,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final String aiRemainingStr;
     if (aiLimit == null) {
       aiRemainingStr = '--';
+    } else if (isExpired) {
+      aiRemainingStr = 'Trial Ended';
     } else if (aiLimit.isUnlimited) {
       aiRemainingStr = 'Unlimited';
     } else {
@@ -710,16 +714,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       badgeLabel = '⚡ PRO TIER';
       badgeColor = const Color(0xFF0369A1);
       badgeBg = const Color(0xFFE0F2FE);
-    } else if (isNotStarted) {
-      badgeLabel = '🌱 ₹${cfg.trialPrice.toInt()} TRIAL AVAILABLE';
-      badgeColor = AppColors.primaryDark;
-      badgeBg = const Color(0xFFD1FAE5);
     } else if (isExpired) {
       badgeLabel = '🥀 TRIAL ENDED — UPGRADE';
       badgeColor = AppColors.error;
       badgeBg = const Color(0xFFFEE2E2);
+    } else if (isNotStarted) {
+      badgeLabel = '🌱 ${cfg.trialDays}-DAY FREE TRIAL';
+      badgeColor = AppColors.primaryDark;
+      badgeBg = const Color(0xFFD1FAE5);
     } else {
-      badgeLabel = '🌱 ${cfg.trialDays}-DAY PRO TRIAL ACTIVE';
+      badgeLabel = '🌱 ${trialInfo.remainingDays}D FREE TRIAL ACTIVE';
       badgeColor = AppColors.primaryDark;
       badgeBg = const Color(0xFFD1FAE5);
     }
@@ -727,7 +731,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final String actionText;
     final VoidCallback onActionTap;
     if (isNotStarted) {
-      actionText = 'Activate ₹${cfg.trialPrice.toInt()}';
+      actionText = 'Start Trial';
       onActionTap = () => Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const TrialActivationScreen()),

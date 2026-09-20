@@ -73,7 +73,7 @@ Designed with a **Soft Botanical Minimalist** design system, featuring emerald a
 - **Auto-Sync Engine**: Queues actions taken in offline mode and synchronizes with Supabase PostgreSQL as soon as connectivity is restored.
 
 ### 💳 Tiered Subscriptions & Quota Management
-- **Flexible Plans**: Free tier with daily scan quotas, Pro Plan, and Farm Pack.
+- **Flexible Tiers**: 2-Day Free Trial (₹0 / 15 scans & AI chats/day), Emergency Doctor Pass (₹10/24h), Pro Plan (₹49/30d), and Farm Pack (₹199/30d).
 - **Payment Verification**: Secure payment verification through Supabase Edge Functions with Razorpay integration.
 
 ---

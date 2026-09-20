@@ -28,19 +28,41 @@ class ScanLimiter {
 
     final trialInfo = TrialService.getTrialInfo(appUser, trialDays: config.trialDays);
 
+    // Free tier strictly denotes the Trial (no perpetual free plan)
+    if (tier == 'free') {
+      if (trialInfo.isExpired) {
+        return ScanLimitResult(
+          canScan: false,
+          remaining: 0,
+          limit: config.freeScanLimit,
+          tier: 'trial_expired',
+          reason: 'Your Free Trial has ended. Please upgrade to Pro (${config.proPrice}/mo) or Farm Pack (${config.farmPrice}/mo) to continue scanning plants.',
+          isExpired: true,
+          isNotStarted: false,
+        );
+      }
+
+      final limit = config.freeScanLimit;
+      final todayCount = appUser.todayScans;
+      final remaining = (limit - todayCount).clamp(0, limit);
+
+      return ScanLimitResult(
+        canScan: remaining > 0,
+        remaining: remaining,
+        limit: limit,
+        tier: 'trial',
+        reason: remaining <= 0 ? 'Daily trial limit reached ($limit scans/day on Free Trial). Resets at midnight, or upgrade for higher limits.' : null,
+        isExpired: false,
+        isNotStarted: trialInfo.isNotStarted,
+      );
+    }
+
+    // Paid Tiers: Pro or Farm
     int limit;
-    String effectiveTier = tier;
     if (tier == 'farm') {
       limit = config.farmScanLimit;
-    } else if (tier == 'pro') {
-      limit = config.proScanLimit;
-    } else if (trialInfo.isActive) {
-      // Trial benefits are identical to Tier 1 (Pro)
-      limit = config.proScanLimit;
-      effectiveTier = 'pro';
     } else {
-      // Free plan follows DB config
-      limit = config.freeScanLimit;
+      limit = config.proScanLimit;
     }
 
     // -1 or <= 0 indicates unlimited
@@ -49,9 +71,9 @@ class ScanLimiter {
         canScan: true,
         remaining: -1,
         limit: -1,
-        tier: effectiveTier,
-        isExpired: trialInfo.isExpired,
-        isNotStarted: trialInfo.isNotStarted,
+        tier: tier,
+        isExpired: false,
+        isNotStarted: false,
       );
     }
 
@@ -62,10 +84,10 @@ class ScanLimiter {
       canScan: remaining > 0,
       remaining: remaining,
       limit: limit,
-      tier: effectiveTier,
-      reason: remaining <= 0 ? 'Daily limit reached ($limit scans/day on ${trialInfo.isActive ? "Pro Trial" : effectiveTier} plan)' : null,
-      isExpired: trialInfo.isExpired,
-      isNotStarted: trialInfo.isNotStarted,
+      tier: tier,
+      reason: remaining <= 0 ? 'Daily limit reached ($limit scans/day on $tier plan)' : null,
+      isExpired: false,
+      isNotStarted: false,
     );
   }
 
@@ -81,19 +103,41 @@ class ScanLimiter {
 
     final trialInfo = TrialService.getTrialInfo(appUser, trialDays: config.trialDays);
 
+    // Free tier strictly denotes the Trial (no perpetual free plan)
+    if (tier == 'free') {
+      if (trialInfo.isExpired) {
+        return AiLimitResult(
+          canUse: false,
+          remaining: 0,
+          limit: config.freeAiLimit,
+          tier: 'trial_expired',
+          reason: 'Your Free Trial has ended. Please upgrade to Pro (${config.proPrice}/mo) or Farm Pack (${config.farmPrice}/mo) to continue chatting with the AI Plant Doctor.',
+          isExpired: true,
+          isNotStarted: false,
+        );
+      }
+
+      final limit = config.freeAiLimit;
+      final todayAi = appUser.todayAi;
+      final remaining = (limit - todayAi).clamp(0, limit);
+
+      return AiLimitResult(
+        canUse: remaining > 0,
+        remaining: remaining,
+        limit: limit,
+        tier: 'trial',
+        reason: remaining <= 0 ? 'Daily AI trial limit reached ($limit chats/day on Free Trial). Resets at midnight, or upgrade for higher limits.' : null,
+        isExpired: false,
+        isNotStarted: trialInfo.isNotStarted,
+      );
+    }
+
+    // Paid Tiers: Pro or Farm
     int limit;
-    String effectiveTier = tier;
     if (tier == 'farm') {
       limit = config.farmAiLimit;
-    } else if (tier == 'pro') {
-      limit = config.proAiLimit;
-    } else if (trialInfo.isActive) {
-      // Trial AI benefits are identical to Tier 1 (Pro)
-      limit = config.proAiLimit;
-      effectiveTier = 'pro';
     } else {
-      // Free plan follows DB config
-      limit = config.freeAiLimit;
+      limit = config.proAiLimit;
     }
 
     if (limit < 0 || (tier == 'farm' && limit <= 0)) {
@@ -101,9 +145,9 @@ class ScanLimiter {
         canUse: true,
         remaining: -1,
         limit: -1,
-        tier: effectiveTier,
-        isExpired: trialInfo.isExpired,
-        isNotStarted: trialInfo.isNotStarted,
+        tier: tier,
+        isExpired: false,
+        isNotStarted: false,
       );
     }
 
@@ -114,10 +158,10 @@ class ScanLimiter {
       canUse: remaining > 0,
       remaining: remaining,
       limit: limit,
-      tier: effectiveTier,
-      reason: remaining <= 0 ? 'Daily AI limit reached ($limit queries/day on ${trialInfo.isActive ? "Pro Trial" : effectiveTier} plan)' : null,
-      isExpired: trialInfo.isExpired,
-      isNotStarted: trialInfo.isNotStarted,
+      tier: tier,
+      reason: remaining <= 0 ? 'Daily AI limit reached ($limit queries/day on $tier plan)' : null,
+      isExpired: false,
+      isNotStarted: false,
     );
   }
 
@@ -267,6 +311,8 @@ class ScanLimitResult {
   bool get isUnlimited => (limit < 0 || remaining == -1);
 
   String get displayText {
+    if (isExpired) return 'Trial Ended';
+    if (isNotStarted) return 'Start Trial';
     if (isUnlimited) return 'Unlimited';
     return '$remaining / $limit left';
   }
@@ -294,6 +340,8 @@ class AiLimitResult {
   bool get isUnlimited => (limit < 0 || remaining == -1);
 
   String get displayText {
+    if (isExpired) return 'Trial Ended';
+    if (isNotStarted) return 'Start Trial';
     if (isUnlimited) return 'Unlimited';
     return '$remaining / $limit left';
   }

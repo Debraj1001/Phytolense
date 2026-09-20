@@ -137,13 +137,13 @@ class _SubscriptionDetailsScreenState extends ConsumerState<SubscriptionDetailsS
       badgeText = 'TRIAL ACTIVE';
       tierColor = AppColors.primary;
     } else if (isTrialNotStarted) {
-      planTitle = 'Free Basic Tier';
-      planSubtitle = '$freeTierDays-Day Trial Available • ₹1 Activation';
+      planTitle = 'Free Trial Available';
+      planSubtitle = '$freeTierDays-Day Free Trial Available • ₹0 Activation';
       badgeText = 'TRIAL AVAILABLE';
       tierColor = AppColors.primary;
     } else {
-      planTitle = 'Basic Free Tier';
-      planSubtitle = 'Trial Expired • Basic Limits';
+      planTitle = 'Free Trial Ended';
+      planSubtitle = 'Trial Expired • Upgrade to Continue Scanning';
       badgeText = 'TRIAL EXPIRED';
       tierColor = AppColors.warning;
     }

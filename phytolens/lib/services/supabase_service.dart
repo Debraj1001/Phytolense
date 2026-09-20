@@ -83,11 +83,15 @@ class SupabaseService {
       if (user == null) return;
       final today = DateTime.now().toIso8601String().substring(0, 10);
       final newDaily = (user.lastScanDate == today) ? user.dailyScanCount + 1 : 1;
-      await _client.from(AppConstants.tableUsers).update({
+      final updates = <String, dynamic>{
         'scan_count': user.scanCount + 1,
         'daily_scan_count': newDaily,
         'last_scan_date': today,
-      }).eq('uid', userId);
+      };
+      if (user.subscriptionTier == 'free' && user.trialActivatedAt == null) {
+        updates['trial_activated_at'] = DateTime.now().toIso8601String();
+      }
+      await _client.from(AppConstants.tableUsers).update(updates).eq('uid', userId);
     } catch (_) {}
   }
 
@@ -113,10 +117,14 @@ class SupabaseService {
       if (user == null) return;
       final today = DateTime.now().toIso8601String().substring(0, 10);
       final newDaily = (user.lastAiDate == today) ? user.dailyAiCount + 1 : 1;
-      await _client.from(AppConstants.tableUsers).update({
+      final updates = <String, dynamic>{
         'daily_ai_count': newDaily,
         'last_ai_date': today,
-      }).eq('uid', userId);
+      };
+      if (user.subscriptionTier == 'free' && user.trialActivatedAt == null) {
+        updates['trial_activated_at'] = DateTime.now().toIso8601String();
+      }
+      await _client.from(AppConstants.tableUsers).update(updates).eq('uid', userId);
     } catch (_) {}
   }
 

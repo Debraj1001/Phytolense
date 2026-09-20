@@ -366,7 +366,7 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Try Pro for ₹${cfg.trialPrice.toInt()} (${cfg.trialDays} Days)',
+                  'Start Free Trial (${cfg.trialDays} Days)',
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
@@ -375,7 +375,7 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Unlock ${cfg.proScanLabel} scans & AI doctor chats instantly',
+                  '${cfg.freeScanLimit} free scans & AI chats/day · ₹0 / No card',
                   style: const TextStyle(fontSize: 12, color: Color(0xFF047857)),
                 ),
               ],
@@ -418,17 +418,13 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Pro Trial Active · ${trialInfo.remainingDays} day${trialInfo.remainingDays == 1 ? "" : "s"} remaining',
+              'Free Trial Active · ${trialInfo.remainingDays} day${trialInfo.remainingDays == 1 ? "" : "s"} left (${cfg.freeScanLimit} scans/day)',
               style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF1E40AF),
               ),
             ),
-          ),
-          const Text(
-            'Day of 2',
-            style: TextStyle(fontSize: 12, color: Color(0xFF3B82F6), fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -449,11 +445,12 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
           SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Your trial has ended. Select a plan below to keep high limits.',
+              'Your Free Trial has ended. Choose Pro or Farm Pack below to continue scanning and diagnosing plants.',
               style: TextStyle(
                 fontSize: 13,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w600,
                 color: Color(0xFF991B1B),
+                height: 1.3,
               ),
             ),
           ),
@@ -675,7 +672,7 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
                       ),
                       Padding(
                         padding: EdgeInsets.symmetric(vertical: 8),
-                        child: Center(child: Text('Free', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF6B7280)))),
+                        child: Center(child: Text('Free Trial', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF059669)))),
                       ),
                       Padding(
                         padding: EdgeInsets.symmetric(vertical: 8),
@@ -687,12 +684,35 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
                       ),
                     ],
                   ),
+                  _comparisonRow('Period', '${cfg.trialDays} Days (Trial)', '30 Days', '30 Days'),
+                  _comparisonRow('Price', 'Free (₹0)', cfg.proPrice, cfg.farmPrice),
                   _comparisonRow('Daily Scans', cfg.freeScanLabel, cfg.proScanLabel, cfg.farmScanLabel),
                   _comparisonRow('AI Chats', cfg.freeAiLabel, cfg.proAiLabel, cfg.farmAiLabel),
                   _comparisonRow('Disease Reports', 'Basic', 'Detailed', 'Full'),
                   _comparisonRow('Farm Limits', '${cfg.farmCreationLimitFree}', '${cfg.farmCreationLimitPro}', '${cfg.farmCreationLimitFarm}'),
                   _comparisonRow('Garden Tracking', '✗', '✗', cfg.gardenEnabled ? '✓' : '✗'),
                   _comparisonRow('PDF Bulk Export', '✗', '✓', cfg.bulkExportEnabled ? '✓' : '✗'),
+                ],
+              ),
+            ),
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF475569)),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'There is no permanent free tier. The Free Trial provides 15 daily scans for 2 days. Upgrade to Pro or Farm Pack to keep access.',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF475569), height: 1.35),
+                    ),
+                  ),
                 ],
               ),
             ),

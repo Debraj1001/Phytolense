@@ -49,16 +49,16 @@ class TrialInfo {
   String get bannerMessage {
     switch (status) {
       case TrialStatus.notStarted:
-        return 'Activate your $totalDays-day Pro trial for just ₹1';
+        return 'Start your $totalDays-day Free Trial (15 scans/day)';
       case TrialStatus.active:
-        return '$remainingDays day${remainingDays == 1 ? '' : 's'} left in Pro trial';
+        return '$remainingDays day${remainingDays == 1 ? '' : 's'} left in Free Trial';
       case TrialStatus.expiringSoon:
         if (remainingDays <= 0) {
-          return 'Last day of your Pro trial';
+          return 'Last day of your Free Trial';
         }
-        return 'Only $remainingDays day${remainingDays == 1 ? '' : 's'} left in Pro trial — upgrade now';
+        return 'Only $remainingDays day${remainingDays == 1 ? '' : 's'} left in Free Trial — upgrade to continue';
       case TrialStatus.expired:
-        return 'Trial ended — Upgrade to Pro or Farm Pack';
+        return 'Free Trial ended — Upgrade to Pro or Farm Pack';
       case TrialStatus.upgraded:
         return '';
     }

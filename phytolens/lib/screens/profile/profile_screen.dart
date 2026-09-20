@@ -517,12 +517,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget _buildMenuSection() {
     final tier = _user?.subscriptionTier ?? 'free';
     final isPaid = tier == 'pro' || tier == 'farm';
-    final planLabel = tier == 'farm' ? 'Farm Pack' : (tier == 'pro' ? 'Pro Tier' : 'Free Plan');
 
     // Compute trial status
     final config = ref.watch(appConfigProvider).value;
     final trialInfo = TrialService.getTrialInfo(_user, trialDays: config?.trialDays ?? 2);
     final trialLabel = trialInfo.badgeLabel;
+
+    final planLabel = tier == 'farm'
+        ? 'Farm Pack'
+        : (tier == 'pro'
+            ? 'Pro Tier'
+            : (trialInfo.isExpired ? 'Trial Ended' : (trialInfo.isActive ? 'Free Trial' : 'Trial Available')));
 
     final items = [
       _MenuItem(

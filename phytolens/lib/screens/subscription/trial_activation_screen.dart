@@ -8,6 +8,7 @@ import '../../services/payment_service.dart';
 import '../../services/trial_service.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/app_config_provider.dart';
+import '../../services/supabase_service.dart';
 import '../../config/constants.dart';
 import 'upgrade_screen.dart';
 
@@ -67,18 +68,49 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
     super.dispose();
   }
 
-  void _startTrial(AppConfig cfg) {
+  void _startTrial(AppConfig cfg) async {
     final user = ref.read(currentUserProvider).value;
     if (user == null) return;
 
     setState(() => _isLoading = true);
     
     final trialPaise = (cfg.trialPrice * 100).toInt();
+    if (trialPaise <= 0) {
+      try {
+        await SupabaseService().activateTrial(user.uid);
+        ref.invalidate(currentUserProvider);
+        if (mounted) {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${cfg.trialDays}-Day Free Trial Activated Successfully!'),
+              backgroundColor: AppColors.success,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          );
+          if (widget.fromOnboarding) {
+            Navigator.pushNamedAndRemoveUntil(context, AppConstants.routeHome, (_) => false);
+          } else {
+            Navigator.pop(context);
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to activate trial: $e'), backgroundColor: AppColors.error),
+          );
+        }
+      }
+      return;
+    }
+
     _paymentService.openCheckout(
       plan: 'trial',
       userEmail: user.email,
       userContact: user.phone ?? '',
-      customAmountPaise: trialPaise > 0 ? trialPaise : 100,
+      customAmountPaise: trialPaise,
     );
   }
 
@@ -323,7 +355,7 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
                       ),
                       const SizedBox(height: 24),
                       const Text(
-                        'Unlock Pro Access',
+                        'Start Free Trial',
                         style: TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.w800,
@@ -333,7 +365,9 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Start your ${cfg.trialDays}-Day Pro Trial for just ₹${cfg.trialPrice.toInt()}',
+                        cfg.trialPrice <= 0
+                            ? 'Enjoy ${cfg.trialDays} days of plant diagnosis for ₹0 (Free)'
+                            : 'Start your ${cfg.trialDays}-Day Trial for just ₹${cfg.trialPrice.toInt()}',
                         style: const TextStyle(
                           fontSize: 16,
                           color: AppColors.textSecondary,
@@ -356,7 +390,7 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
-                        'Tier 1 (Pro) Benefits Included',
+                        'Free Trial Benefits Included',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
@@ -370,7 +404,7 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Text(
-                          'PRO TIER',
+                          'FREE TRIAL',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
@@ -384,32 +418,32 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
                   const SizedBox(height: 20),
                   _buildFeatureRow(
                     icon: Icons.qr_code_scanner_rounded,
-                    title: '${cfg.proScanLabel} Plant Scans',
-                    subtitle: 'Scan up to ${cfg.proScanLimit} plant leaves daily with AI precision',
+                    title: '${cfg.freeScanLimit} Plant Scans / Day',
+                    subtitle: 'Scan up to ${cfg.freeScanLimit} plant leaves daily with AI precision',
                   ),
                   const SizedBox(height: 18),
                   _buildFeatureRow(
                     icon: Icons.smart_toy_rounded,
-                    title: '${cfg.proAiLabel} Botanist AI Diagnostics',
-                    subtitle: 'Ask our botanist AI up to ${cfg.proAiLimit} questions every day',
+                    title: '${cfg.freeAiLimit} Botanist AI Diagnostics',
+                    subtitle: 'Ask our botanist AI up to ${cfg.freeAiLimit} questions every day',
                   ),
                   const SizedBox(height: 18),
                   _buildFeatureRow(
                     icon: Icons.monitor_heart_rounded,
-                    title: 'Detailed Disease Diagnosis',
-                    subtitle: 'Comprehensive health reports, causes & treatment plans',
+                    title: 'Disease & Remedy Diagnosis',
+                    subtitle: 'Comprehensive health reports, causes & organic/chemical remedies',
                   ),
                   const SizedBox(height: 18),
                   _buildFeatureRow(
                     icon: Icons.yard_rounded,
-                    title: 'Multi-Plant Garden Tracking',
-                    subtitle: 'Organize and monitor up to ${cfg.farmCreationLimitPro} plant gardens',
+                    title: '1 Farm / Plot Setup',
+                    subtitle: 'Organize and monitor your primary plot',
                   ),
                   const SizedBox(height: 18),
                   _buildFeatureRow(
                     icon: Icons.verified_rounded,
-                    title: 'Ad-Free Experience',
-                    subtitle: 'Zero distractions with priority cloud analysis queue',
+                    title: '100% Free & No Card Needed',
+                    subtitle: 'Zero charges, no auto-renewal, and no surprise debits',
                   ),
                   
                   const SizedBox(height: 36),
@@ -502,7 +536,9 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
                                 ),
                               )
                             : Text(
-                                'Activate ${cfg.trialDays}-Day Pro Trial (₹${cfg.trialPrice.toInt()})',
+                                cfg.trialPrice <= 0
+                                    ? 'Start ${cfg.trialDays}-Day Free Trial'
+                                    : 'Activate ${cfg.trialDays}-Day Trial (₹${cfg.trialPrice.toInt()})',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 16,
