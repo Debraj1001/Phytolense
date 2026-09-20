@@ -366,7 +366,9 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Start Free Trial (${cfg.trialDays} Days)',
+                  cfg.trialPrice <= 0
+                      ? 'Start Free Trial (${cfg.trialDays} Days)'
+                      : 'Start ₹${cfg.trialPrice.toInt()} Trial (${cfg.trialDays} Days)',
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
@@ -375,7 +377,7 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${cfg.freeScanLimit} free scans & AI chats/day · ₹0 / No card',
+                  '${cfg.freeScanLimit} free scans & AI chats/day · ${cfg.trialPrice <= 0 ? "₹0 / No card" : "₹${cfg.trialPrice.toInt()} Trial"}',
                   style: const TextStyle(fontSize: 12, color: Color(0xFF047857)),
                 ),
               ],
@@ -661,8 +663,8 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
                 },
                 children: [
                   // Table Header
-                  const TableRow(
-                    decoration: BoxDecoration(
+                  TableRow(
+                    decoration: const BoxDecoration(
                       border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1.5)),
                     ),
                     children: [
@@ -672,7 +674,7 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
                       ),
                       Padding(
                         padding: EdgeInsets.symmetric(vertical: 8),
-                        child: Center(child: Text('Free Trial', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF059669)))),
+                        child: Center(child: Text(cfg.trialPrice <= 0 ? 'Free Trial' : '₹${cfg.trialPrice.toInt()} Trial', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF059669)))),
                       ),
                       Padding(
                         padding: EdgeInsets.symmetric(vertical: 8),
@@ -685,7 +687,7 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
                     ],
                   ),
                   _comparisonRow('Period', '${cfg.trialDays} Days (Trial)', '30 Days', '30 Days'),
-                  _comparisonRow('Price', 'Free (₹0)', cfg.proPrice, cfg.farmPrice),
+                  _comparisonRow('Price', cfg.trialPrice <= 0 ? 'Free (₹0)' : '₹${cfg.trialPrice.toInt()} (Trial)', cfg.proPrice, cfg.farmPrice),
                   _comparisonRow('Daily Scans', cfg.freeScanLabel, cfg.proScanLabel, cfg.farmScanLabel),
                   _comparisonRow('AI Chats', cfg.freeAiLabel, cfg.proAiLabel, cfg.farmAiLabel),
                   _comparisonRow('Disease Reports', 'Basic', 'Detailed', 'Full'),
@@ -703,14 +705,14 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF475569)),
-                  SizedBox(width: 8),
+                  const Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF475569)),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'There is no permanent free tier. The Free Trial provides 15 daily scans for 2 days. Upgrade to Pro or Farm Pack to keep access.',
-                      style: TextStyle(fontSize: 11, color: Color(0xFF475569), height: 1.35),
+                      'There is no permanent free tier. The ${cfg.trialPrice <= 0 ? "Free Trial" : "₹${cfg.trialPrice.toInt()} Trial"} provides ${cfg.freeScanLimit} daily scans for ${cfg.trialDays} days. Upgrade to Pro or Farm Pack to keep access.',
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF475569), height: 1.35),
                     ),
                   ),
                 ],

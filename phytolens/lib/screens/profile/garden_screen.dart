@@ -25,6 +25,7 @@ class _GardenScreenState extends State<GardenScreen> {
   final _supabase = SupabaseService();
   List<Plant> _plants = [];
   bool _loading = true;
+  bool _isPaid = false;
   StreamSubscription? _sub;
 
   @override
@@ -39,8 +40,22 @@ class _GardenScreenState extends State<GardenScreen> {
     super.dispose();
   }
 
-  void _load() {
-    final uid = Supabase.instance.client.auth.currentUser!.id;
+  void _load() async {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    if (uid == null) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+
+    try {
+      final user = await _supabase.getUser(uid);
+      if (mounted) {
+        setState(() {
+          _isPaid = user?.isPaidActive == true;
+        });
+      }
+    } catch (_) {}
+
     _sub?.cancel();
     _sub = _supabase.streamGarden(uid).listen((plants) {
       if (mounted) {
@@ -70,10 +85,11 @@ class _GardenScreenState extends State<GardenScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add, size: 24, color: AppColors.primary),
-            onPressed: _addPlant,
-          ),
+          if (_isPaid)
+            IconButton(
+              icon: const Icon(Icons.add, size: 24, color: AppColors.primary),
+              onPressed: _addPlant,
+            ),
         ],
       ),
       body: _loading
@@ -81,14 +97,16 @@ class _GardenScreenState extends State<GardenScreen> {
               padding: EdgeInsets.all(16),
               child: ShimmerPlantGrid(count: 4),
             )
-          : _plants.isEmpty
-              ? _buildEmpty()
-              : RefreshIndicator(
-                  onRefresh: () async {
-                    _load();
-                  },
-                  color: AppColors.primary,
-                  backgroundColor: Colors.white,
+          : !_isPaid
+              ? _buildLockedGardenHero()
+              : _plants.isEmpty
+                  ? _buildEmpty()
+                  : RefreshIndicator(
+                      onRefresh: () async {
+                        _load();
+                      },
+                      color: AppColors.primary,
+                      backgroundColor: Colors.white,
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: GridView.builder(
@@ -113,6 +131,99 @@ class _GardenScreenState extends State<GardenScreen> {
                     ),
                   ),
                 ),
+    );
+  }
+
+  Widget _buildLockedGardenHero() {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.local_florist_rounded, color: AppColors.primary, size: 36),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'My Garden (Pro & Farm)',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Multi-plot plant health tracking, custom watering intervals, and disease recovery progress logs are exclusive to Pro Plan and Farm Pack subscribers.',
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.45),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              ...[
+                '🌱 Track up to 5 plots (Pro) or unlimited (Farm Pack)',
+                '💧 Automated irrigation & treatment schedule reminders',
+                '📈 Historical health recovery charts and diagnosis logs',
+              ].map(
+                (feature) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_rounded, size: 16, color: AppColors.primary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          feature,
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const UpgradeScreen()),
+                ),
+                icon: const Icon(Icons.flash_on_rounded, size: 18, color: Colors.white),
+                label: const Text(
+                  'UPGRADE TO UNLOCK GARDEN',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  minimumSize: const Size(double.infinity, 48),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

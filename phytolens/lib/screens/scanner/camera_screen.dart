@@ -28,6 +28,7 @@ import 'result_screen.dart';
 import '../home/home_screen.dart';
 import 'supported_crops_screen.dart';
 import '../../widgets/bouncing_button.dart';
+import '../../widgets/emergency_doctor_pass_sheet.dart';
 
 class CameraScreen extends ConsumerStatefulWidget {
   const CameraScreen({super.key});
@@ -150,12 +151,13 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
       bool identifiedByPlantNet = false;
 
       bool isOnline = await _syncService.isOnline();
+      final isAiEngineEnabled = ref.read(aiEngineProvider);
       final String userTier = limit.tier;
 
       if (mounted) setState(() => _scanStage = 'Identifying plant...');
 
       // ── TIER 2: Pl@ntNet API (online botanical identification) ─────────
-      if (isOnline && (confidence < 0.70 || plantName == 'Unknown Plant' || diseaseName == 'Unrecognized')) {
+      if (isOnline && isAiEngineEnabled && (confidence < 0.70 || plantName == 'Unknown Plant' || diseaseName == 'Unrecognized')) {
         try {
           final plantNetResult = await _plantNet.identifyPlant(file);
 
@@ -178,7 +180,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
       }
 
       // ── TIER 3: Fast Gemini Vision Fallback (non-plant objects & edge cases) ──
-      if (isOnline && !identifiedByPlantNet &&
+      if (isOnline && isAiEngineEnabled && !identifiedByPlantNet &&
           (confidence < 0.70 || plantName == 'Unknown Plant' || diseaseName == 'Unrecognized')) {
         try {
           final visionData = await _gemini.identifyImageFile(file);
@@ -211,7 +213,6 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
           plantName != 'Unknown Plant' && plantName != 'Unrecognized Item') {
         if (mounted) setState(() => _scanStage = 'Generating report...');
         try {
-          final isAiEngineEnabled = ref.read(aiEngineProvider);
           if (isOnline && isAiEngineEnabled) {
             remedy = await _groq.getTieredAdvice(
               tier: userTier,
@@ -220,7 +221,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
               healthScore: healthScore,
             );
           } else {
-            throw Exception(isOnline ? 'AI Engine Disabled by User' : 'Offline mode active');
+            throw Exception(isOnline ? 'AI Cloud Engine Disabled by User' : 'Offline mode active');
           }
         } catch (e) {
           debugPrint('Online report skipped/failed: $e');
@@ -347,7 +348,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
               limit.isExpired
                   ? 'Free Trial Concluded'
                   : (limit.isNotStarted
-                      ? 'Start ${cfg.trialDays}-Day Free Trial'
+                      ? (cfg.trialPrice <= 0 ? 'Start ${cfg.trialDays}-Day Free Trial' : 'Start ₹${cfg.trialPrice.toInt()} Trial')
                       : 'Daily Scan Limit Reached'),
               style: TextStyle(
                 fontSize: 20,
@@ -360,7 +361,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
               limit.isExpired
                   ? 'Your ${cfg.trialDays}-day Free Trial has ended. There is no permanent free tier. Upgrade to Pro (${cfg.proPrice}/mo) or Farm Pack (${cfg.farmPrice}/mo) to continue scanning plants.'
                   : (limit.isNotStarted
-                      ? 'Activate your ${cfg.trialDays}-Day Free Trial to enjoy ${limit.limit} AI leaf scans per day, remedies, and treatment guides.'
+                      ? 'Activate your ${cfg.trialDays}-Day Trial (${cfg.trialPrice <= 0 ? "Free" : "₹${cfg.trialPrice.toInt()}"}) to enjoy ${limit.limit} AI leaf scans per day, remedies, and treatment guides.'
                       : 'You\'ve reached your daily limit of ${limit.limit} scans on your plan. Resets at midnight, or upgrade for higher daily allowances.'),
               style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.4),
               textAlign: TextAlign.center,
@@ -394,13 +395,152 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
               label: Text(
                 limit.isExpired
                     ? 'Upgrade to Pro or Farm'
-                    : (limit.isNotStarted ? 'Start Free Trial' : 'Upgrade Plan'),
+                    : (limit.isNotStarted ? (cfg.trialPrice <= 0 ? 'Start Free Trial' : 'Activate ₹${cfg.trialPrice.toInt()} Trial') : 'Upgrade Plan'),
                 style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTrialExpiredPaywall(BuildContext context, ScanLimitResult limit) {
+    final cfg = ref.watch(appConfigProvider).value ?? const AppConfig();
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppColors.error.withValues(alpha: 0.2)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.lock_clock_rounded, size: 16, color: AppColors.error),
+                  SizedBox(width: 6),
+                  Text(
+                    'FREE TRIAL CONCLUDED',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.error, letterSpacing: 0.5),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.no_photography_rounded, color: AppColors.error, size: 40),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Plant Diagnosis Locked',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Your ${cfg.trialDays}-Day Free Trial has ended. There is no permanent free tier. To diagnose crop pathologies and access tailored agronomic prescriptions, please upgrade to an active plan.',
+              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.45),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4)),
+                ],
+              ),
+              child: Column(
+                children: [
+                  _buildPlanHighlightRow(
+                    title: 'Pro Plan (${cfg.proPrice}/30d)',
+                    subtitle: '${cfg.proScanLimit} scans & ${cfg.proAiLimit} AI chats/day · Organic & chemical recipes',
+                    isHighlighted: true,
+                  ),
+                  const Divider(height: 20),
+                  _buildPlanHighlightRow(
+                    title: 'Farm Pack (${cfg.farmPrice}/30d)',
+                    subtitle: '${cfg.farmScanLimit} scans/day · Multi-farm plot tracker · B2B retailers directory',
+                    isHighlighted: false,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpgradeScreen())),
+              icon: const Icon(Icons.flash_on_rounded, size: 20, color: Colors.white),
+              label: const Text('UPGRADE TO PRO OR FARM', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                minimumSize: const Size(double.infinity, 50),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => EmergencyDoctorPassSheet.show(context),
+              icon: const Icon(Icons.medical_services_rounded, size: 16, color: Color(0xFF4F46E5)),
+              label: const Text('Emergency Doctor Pass (₹10 / 24h)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF4F46E5))),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFF6366F1), width: 1.2),
+                minimumSize: const Size(double.infinity, 44),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlanHighlightRow({
+    required String title,
+    required String subtitle,
+    required bool isHighlighted,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: (isHighlighted ? AppColors.primary : AppColors.secondary).withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            isHighlighted ? Icons.workspace_premium_rounded : Icons.agriculture_rounded,
+            color: isHighlighted ? AppColors.primary : AppColors.secondary,
+            size: 20,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+              const SizedBox(height: 2),
+              Text(subtitle, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, height: 1.3)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -414,6 +554,24 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
 
     final scanLimitState = ref.watch(scanLimitProvider);
     final limitDisplay = scanLimitState.value ?? _limitResult;
+
+    if (limitDisplay != null && limitDisplay.isExpired) {
+      return Scaffold(
+        backgroundColor: AppColors.lightBg,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, size: 18, color: AppColors.textPrimary),
+            onPressed: () => ref.read(navIndexProvider.notifier).state = 0,
+          ),
+          title: const Text('PhytoLens Scanner', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700, fontSize: 18)),
+        ),
+        body: SafeArea(
+          child: _buildTrialExpiredPaywall(context, limitDisplay),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppColors.lightBg,

@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:phytolens/theme/colors.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../providers/user_provider.dart';
+import '../../providers/app_config_provider.dart';
+import '../../services/trial_service.dart';
+import '../subscription/upgrade_screen.dart';
 
-class RetailerDirectoryScreen extends StatefulWidget {
+class RetailerDirectoryScreen extends ConsumerStatefulWidget {
   const RetailerDirectoryScreen({super.key});
 
   @override
-  State<RetailerDirectoryScreen> createState() => _RetailerDirectoryScreenState();
+  ConsumerState<RetailerDirectoryScreen> createState() => _RetailerDirectoryScreenState();
 }
 
-class _RetailerDirectoryScreenState extends State<RetailerDirectoryScreen> {
+class _RetailerDirectoryScreenState extends ConsumerState<RetailerDirectoryScreen> {
   final _supabase = Supabase.instance.client;
   List<Map<String, dynamic>> _retailers = [];
   bool _loading = true;
@@ -44,6 +49,11 @@ class _RetailerDirectoryScreenState extends State<RetailerDirectoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(currentUserProvider).value;
+    final config = ref.watch(appConfigProvider).value ?? const AppConfig();
+    final trialInfo = TrialService.getTrialInfo(user, trialDays: config.trialDays);
+    final isLocked = !trialInfo.isUpgraded && trialInfo.isExpired;
+
     return Scaffold(
       backgroundColor: AppColors.lightBg,
       appBar: AppBar(
@@ -58,20 +68,22 @@ class _RetailerDirectoryScreenState extends State<RetailerDirectoryScreen> {
         iconTheme: const IconThemeData(color: AppColors.lightTextPrimary),
         elevation: 0,
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _retailers.isEmpty
-              ? Center(
-                  child: Text(
-                    'No retailers found nearby.',
-                    style: GoogleFonts.plusJakartaSans(color: AppColors.textSecondary),
-                  ),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.all(20),
-                  itemCount: _retailers.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 16),
-                  itemBuilder: (context, index) {
+      body: isLocked
+          ? _buildLockedPaywall(context, config)
+          : _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _retailers.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No retailers found nearby.',
+                        style: GoogleFonts.plusJakartaSans(color: AppColors.textSecondary),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(20),
+                      itemCount: _retailers.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 16),
+                      itemBuilder: (context, index) {
                     final r = _retailers[index];
                     return Container(
                       padding: const EdgeInsets.all(16),
@@ -157,6 +169,77 @@ class _RetailerDirectoryScreenState extends State<RetailerDirectoryScreen> {
                     );
                   },
                 ),
+    );
+  }
+
+  Widget _buildLockedPaywall(BuildContext context, AppConfig config) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.storefront_rounded, color: AppColors.error, size: 36),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'Nearby Retailers Locked',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Your ${config.trialDays}-Day Free Trial has ended. Access to certified fertilizer stockists, seed distributors, and direct retailer calling requires an active Pro Plan or Farm Pack.',
+                style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.45),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const UpgradeScreen()),
+                ),
+                icon: const Icon(Icons.flash_on_rounded, size: 18, color: Colors.white),
+                label: const Text(
+                  'UPGRADE TO ACCESS RETAILERS',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  minimumSize: const Size(double.infinity, 48),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

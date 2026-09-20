@@ -354,9 +354,9 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      const Text(
-                        'Start Free Trial',
-                        style: TextStyle(
+                      Text(
+                        cfg.trialPrice <= 0 ? 'Start Free Trial' : 'Start ₹${cfg.trialPrice.toInt()} Trial',
+                        style: const TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.w800,
                           color: AppColors.textPrimary,
@@ -389,9 +389,9 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Free Trial Benefits Included',
-                        style: TextStyle(
+                      Text(
+                        cfg.trialPrice <= 0 ? 'Free Trial Benefits Included' : '${cfg.trialDays}-Day Trial Benefits Included',
+                        style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
                           color: AppColors.textPrimary,
@@ -403,9 +403,9 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
                           color: AppColors.primary.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Text(
-                          'FREE TRIAL',
-                          style: TextStyle(
+                        child: Text(
+                          cfg.trialPrice <= 0 ? 'FREE TRIAL' : '₹${cfg.trialPrice.toInt()} TRIAL',
+                          style: const TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
                             color: AppColors.primaryLight,
@@ -442,8 +442,10 @@ class _TrialActivationScreenState extends ConsumerState<TrialActivationScreen> {
                   const SizedBox(height: 18),
                   _buildFeatureRow(
                     icon: Icons.verified_rounded,
-                    title: '100% Free & No Card Needed',
-                    subtitle: 'Zero charges, no auto-renewal, and no surprise debits',
+                    title: cfg.trialPrice <= 0 ? '100% Free & No Card Needed' : 'Nominal ₹${cfg.trialPrice.toInt()} Verification',
+                    subtitle: cfg.trialPrice <= 0
+                        ? 'Zero charges, no auto-renewal, and no surprise debits'
+                        : 'One-time ₹${cfg.trialPrice.toInt()} payment, no auto-renewal or surprise debits',
                   ),
                   
                   const SizedBox(height: 36),

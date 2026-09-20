@@ -17,6 +17,13 @@ class AiEngineNotifier extends StateNotifier<bool> {
     state = prefs.getBool(_key) ?? true;
   }
 
+  Future<void> setEnabled(bool enabled) async {
+    if (state == enabled) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_key, enabled);
+    state = enabled;
+  }
+
   Future<void> toggle() async {
     final prefs = await SharedPreferences.getInstance();
     final newState = !state;

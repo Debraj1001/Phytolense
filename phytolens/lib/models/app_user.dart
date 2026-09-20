@@ -84,6 +84,23 @@ class AppUser {
 
   bool get hasTrialStarted => trialActivatedAt != null;
 
+  bool get isPaidActive {
+    final tier = subscriptionTier.toLowerCase();
+    if (tier != AppConstants.tierPro && tier != AppConstants.tierFarm) {
+      return false;
+    }
+    if (subscriptionExpiry != null && subscriptionExpiry!.isBefore(DateTime.now())) {
+      return false;
+    }
+    return true;
+  }
+
+  bool hasActiveAccess(int trialDays) {
+    if (isPaidActive) return true;
+    if (trialActivatedAt == null) return true;
+    return !isFreeTrialExpired(trialDays);
+  }
+
   bool isFreeTrialActive(int trialDays) {
     if (trialActivatedAt == null) return false;
     return !isFreeTrialExpired(trialDays);

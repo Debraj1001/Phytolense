@@ -90,7 +90,10 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
 
     // Check AI limit
     final limit = ref.read(aiLimitProvider).value;
-    if (limit == null || !limit.canUse) {
+    if (limit == null || !limit.canUse || limit.isExpired) {
+      if (limit?.isExpired == true && mounted) {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const UpgradeScreen()));
+      }
       return;
     }
 
@@ -295,7 +298,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
     final limitReached = !isLoading && !(limit!.canUse);
 
     if (limitReached) {
-      final isOffline = limit.reason != null && limit.reason!.contains('Internet');
+      final isOffline = !limit.isExpired && limit.reason != null && limit.reason!.contains('Internet');
       
       if (isOffline) {
         // ── OFFLINE MODE: Show subtle banner but ALLOW input ──
@@ -360,7 +363,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
             Text(
               limit.isExpired
                   ? 'Free Trial Concluded'
-                  : (limit.isNotStarted ? 'Start ${cfg.trialDays}-Day Free Trial' : 'Daily AI Limit Reached'),
+                  : (limit.isNotStarted ? (cfg.trialPrice <= 0 ? 'Start ${cfg.trialDays}-Day Free Trial' : 'Start ₹${cfg.trialPrice.toInt()} Trial') : 'Daily AI Limit Reached'),
               style: TextStyle(
                 color: limit.isExpired ? AppColors.error : AppColors.warning,
                 fontWeight: FontWeight.bold,
@@ -372,7 +375,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
               limit.isExpired
                   ? 'Your ${cfg.trialDays}-day Free Trial has ended. There is no permanent free tier. Please upgrade to Pro (${cfg.proPrice}/mo) or Farm Pack (${cfg.farmPrice}/mo) to continue chatting with AI Plant Doctor.'
                   : (limit.isNotStarted
-                      ? 'Activate your Free Trial to ask up to ${limit.limit} questions every day to our AI Botanist.'
+                      ? 'Activate your ${cfg.trialDays}-Day Trial (${cfg.trialPrice <= 0 ? "Free" : "₹${cfg.trialPrice.toInt()}"}) to ask up to ${limit.limit} questions every day to our AI Botanist.'
                       : 'You\'ve reached your daily limit of ${limit.limit} AI chats on your plan. Resets at midnight, or upgrade for higher allowances.'),
               style: const TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.4),
               textAlign: TextAlign.center,
@@ -411,7 +414,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
                     Text(
                       limit.isExpired
                           ? 'UPGRADE TO PRO OR FARM'
-                          : (limit.isNotStarted ? 'START FREE TRIAL' : 'UPGRADE PLAN'),
+                          : (limit.isNotStarted ? (cfg.trialPrice <= 0 ? 'START FREE TRIAL' : 'ACTIVATE ₹${cfg.trialPrice.toInt()} TRIAL') : 'UPGRADE PLAN'),
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,

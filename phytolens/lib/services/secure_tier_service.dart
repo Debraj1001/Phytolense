@@ -53,6 +53,8 @@ class SecureTierService {
     required DateTime? expiryDate,
     required int dailyScanLimit,
     required int dailyAiLimit,
+    DateTime? trialActivatedAt,
+    int trialDays = 2,
   }) async {
     final payload = TierPayload(
       uid: uid,
@@ -61,6 +63,8 @@ class SecureTierService {
       dailyScanLimit: dailyScanLimit,
       dailyAiLimit: dailyAiLimit,
       issuedAt: DateTime.now(),
+      trialActivatedAt: trialActivatedAt,
+      trialDays: trialDays,
     );
 
     final jsonString = jsonEncode(payload.toMap());
@@ -75,7 +79,7 @@ class SecureTierService {
     );
 
     _cachedPayload = payload;
-    debugPrint('🔒 Tier saved securely: $tier (expires: $expiryDate)');
+    debugPrint('🔒 Tier saved securely: $tier (expires: $expiryDate, trial: $trialActivatedAt)');
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -141,7 +145,8 @@ class SecureTierService {
   /// Falls back to 'free' if not available.
   Future<String> getCachedTierString() async {
     final payload = await getCachedTier();
-    if (payload == null || payload.isExpired) return AppConstants.tierFree;
+    if (payload == null) return AppConstants.tierFree;
+    if (payload.isExpired) return 'trial_expired';
     return payload.tier;
   }
 
@@ -161,17 +166,19 @@ class SecureTierService {
     }
   }
 
-  /// Get daily scan limit from cached tier
+  /// Get daily scan limit from cached tier (0 if expired)
   Future<int> getDailyScanLimit() async {
     final payload = await getCachedTier();
-    if (payload == null || payload.isExpired) return AppConstants.freeDailyScanLimit;
+    if (payload == null) return AppConstants.freeDailyScanLimit;
+    if (payload.isExpired) return 0;
     return payload.dailyScanLimit;
   }
 
-  /// Get daily AI limit from cached tier (same as online Groq limits)
+  /// Get daily AI limit from cached tier (0 if expired)
   Future<int> getDailyAiLimit() async {
     final payload = await getCachedTier();
-    if (payload == null || payload.isExpired) return AppConstants.freeDailyAiLimit;
+    if (payload == null) return AppConstants.freeDailyAiLimit;
+    if (payload.isExpired) return 0;
     return payload.dailyAiLimit;
   }
 
@@ -299,6 +306,8 @@ class TierPayload {
   final int dailyScanLimit;
   final int dailyAiLimit;
   final DateTime issuedAt;
+  final DateTime? trialActivatedAt;
+  final int trialDays;
 
   const TierPayload({
     required this.uid,
@@ -307,11 +316,19 @@ class TierPayload {
     required this.dailyScanLimit,
     required this.dailyAiLimit,
     required this.issuedAt,
+    this.trialActivatedAt,
+    this.trialDays = 2,
   });
 
   bool get isExpired {
-    if (expiryDate == null) return false; // No expiry = permanent (free tier)
-    return DateTime.now().isAfter(expiryDate!);
+    if (tier.toLowerCase() != AppConstants.tierFree) {
+      if (expiryDate != null) return DateTime.now().isAfter(expiryDate!);
+      return false;
+    }
+    // Free tier = Free Trial!
+    if (trialActivatedAt == null) return false;
+    final trialEnd = trialActivatedAt!.add(Duration(days: trialDays));
+    return DateTime.now().isAfter(trialEnd);
   }
 
   bool get isFree => tier == AppConstants.tierFree;
@@ -325,6 +342,8 @@ class TierPayload {
     'daily_scan_limit': dailyScanLimit,
     'daily_ai_limit': dailyAiLimit,
     'issued_at': issuedAt.toUtc().toIso8601String(),
+    'trial_activated_at': trialActivatedAt?.toUtc().toIso8601String(),
+    'trial_days': trialDays,
   };
 
   factory TierPayload.fromMap(Map<String, dynamic> map) => TierPayload(
@@ -336,5 +355,9 @@ class TierPayload {
     dailyScanLimit: map['daily_scan_limit'] ?? AppConstants.freeDailyScanLimit,
     dailyAiLimit: map['daily_ai_limit'] ?? AppConstants.freeDailyAiLimit,
     issuedAt: DateTime.tryParse(map['issued_at'] ?? '') ?? DateTime.now(),
+    trialActivatedAt: map['trial_activated_at'] != null
+        ? DateTime.tryParse(map['trial_activated_at'])
+        : null,
+    trialDays: map['trial_days'] ?? 2,
   );
 }

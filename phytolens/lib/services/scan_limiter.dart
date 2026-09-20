@@ -175,15 +175,43 @@ class ScanLimiter {
     if (isOnline) {
       final appUser = await _supabase.getUser(user.id);
       final config = await _supabase.fetchAppConfig();
+      if (appUser != null) {
+        final isPro = appUser.subscriptionTier == 'pro';
+        final isFarm = appUser.subscriptionTier == 'farm';
+        final scanLimit = isFarm ? config.farmScanLimit : (isPro ? config.proScanLimit : config.freeScanLimit);
+        final aiLimit = isFarm ? config.farmAiLimit : (isPro ? config.proAiLimit : config.freeAiLimit);
+        await SecureTierService().saveTier(
+          uid: appUser.uid,
+          tier: appUser.subscriptionTier,
+          expiryDate: appUser.subscriptionExpiry,
+          dailyScanLimit: scanLimit,
+          dailyAiLimit: aiLimit,
+          trialActivatedAt: appUser.trialActivatedAt,
+          trialDays: config.trialDays,
+        );
+      }
       return computeScanLimit(appUser, config);
     }
 
     // ── SECURE OFFLINE TIER CHECK ──
     // Uses HMAC-signed cached tier instead of plain SharedPreferences
     final secureTier = SecureTierService();
+    final cachedPayload = await secureTier.getCachedTier();
     final tierString = await secureTier.getCachedTierString();
-    final limit = await secureTier.getDailyScanLimit();
 
+    if (cachedPayload != null && cachedPayload.isExpired) {
+      return const ScanLimitResult(
+        canScan: false,
+        remaining: 0,
+        limit: 0,
+        tier: 'trial_expired',
+        reason: 'Your Free Trial has ended. Please connect to the internet and upgrade to Pro or Farm Pack to continue scanning.',
+        isExpired: true,
+        isNotStarted: false,
+      );
+    }
+
+    final limit = await secureTier.getDailyScanLimit();
     final prefs = await SharedPreferences.getInstance();
     final todayCount = _getLocalScanCount(prefs);
 
@@ -219,9 +247,22 @@ class ScanLimiter {
     // ── OFFLINE AI LIMIT — same daily limits as online ──
     // Uses local LLM instead of Groq, with the same tier-based daily limits.
     final secureTier = SecureTierService();
+    final cachedPayload = await secureTier.getCachedTier();
     final tierString = await secureTier.getCachedTierString();
-    final limit = await secureTier.getDailyAiLimit();
 
+    if (cachedPayload != null && cachedPayload.isExpired) {
+      return const AiLimitResult(
+        canUse: false,
+        remaining: 0,
+        limit: 0,
+        tier: 'trial_expired',
+        reason: 'Your Free Trial has ended. Please connect to the internet and upgrade to Pro or Farm Pack to continue chatting with AI Doctor.',
+        isExpired: true,
+        isNotStarted: false,
+      );
+    }
+
+    final limit = await secureTier.getDailyAiLimit();
     final prefs = await SharedPreferences.getInstance();
     final todayAiCount = _getLocalAiCount(prefs);
 
@@ -338,6 +379,7 @@ class AiLimitResult {
   });
 
   bool get isUnlimited => (limit < 0 || remaining == -1);
+  bool get canChat => canUse;
 
   String get displayText {
     if (isExpired) return 'Trial Ended';

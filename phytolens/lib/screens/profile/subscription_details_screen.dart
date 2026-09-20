@@ -121,6 +121,8 @@ class _SubscriptionDetailsScreenState extends ConsumerState<SubscriptionDetailsS
     final String badgeText;
     final Color tierColor;
 
+    final trialPrice = liveConfig?.trialPrice ?? (_config['trial_price'] as num?)?.toDouble() ?? 1.0;
+
     if (isFarm) {
       planTitle = 'Farm Enterprise Pack';
       planSubtitle = isPaidExpired ? 'Subscription Expired' : 'Full Agricultural Suite';
@@ -132,17 +134,19 @@ class _SubscriptionDetailsScreenState extends ConsumerState<SubscriptionDetailsS
       badgeText = isPaidExpired ? 'EXPIRED' : 'PRO ACTIVE';
       tierColor = AppColors.secondary;
     } else if (isTrialActive) {
-      planTitle = 'Free Introductory Trial';
+      planTitle = trialPrice <= 0 ? 'Free Introductory Trial' : 'Introductory Trial';
       planSubtitle = '$freeTierDays-Day Trial Period ($trialRemainingText)';
       badgeText = 'TRIAL ACTIVE';
       tierColor = AppColors.primary;
     } else if (isTrialNotStarted) {
-      planTitle = 'Free Trial Available';
-      planSubtitle = '$freeTierDays-Day Free Trial Available • ₹0 Activation';
+      planTitle = trialPrice <= 0 ? 'Free Trial Available' : 'Trial Available';
+      planSubtitle = trialPrice <= 0
+          ? '$freeTierDays-Day Free Trial Available • ₹0 Activation'
+          : '$freeTierDays-Day Trial Available • ₹${trialPrice.toInt()} Activation';
       badgeText = 'TRIAL AVAILABLE';
       tierColor = AppColors.primary;
     } else {
-      planTitle = 'Free Trial Ended';
+      planTitle = trialPrice <= 0 ? 'Free Trial Ended' : 'Trial Ended';
       planSubtitle = 'Trial Expired • Upgrade to Continue Scanning';
       badgeText = 'TRIAL EXPIRED';
       tierColor = AppColors.warning;

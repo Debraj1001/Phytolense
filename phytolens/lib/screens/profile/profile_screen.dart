@@ -515,19 +515,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Widget _buildMenuSection() {
-    final tier = _user?.subscriptionTier ?? 'free';
-    final isPaid = tier == 'pro' || tier == 'farm';
+    final user = _user;
+    final isPaid = user?.isPaidActive == true;
 
-    // Compute trial status
+    // Compute trial status from DB config
     final config = ref.watch(appConfigProvider).value;
     final trialInfo = TrialService.getTrialInfo(_user, trialDays: config?.trialDays ?? 2);
     final trialLabel = trialInfo.badgeLabel;
+    final isLocked = !isPaid && trialInfo.isExpired;
 
-    final planLabel = tier == 'farm'
-        ? 'Farm Pack'
-        : (tier == 'pro'
-            ? 'Pro Tier'
-            : (trialInfo.isExpired ? 'Trial Ended' : (trialInfo.isActive ? 'Free Trial' : 'Trial Available')));
+    final planLabel = isPaid
+        ? (user!.subscriptionTier.toLowerCase() == 'farm' ? 'Farm Pack' : 'Pro Tier')
+        : (trialInfo.isExpired ? 'Trial Ended' : (trialInfo.isActive ? 'Free Trial' : 'Trial Available'));
 
     final items = [
       _MenuItem(
@@ -592,10 +591,34 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       _MenuItem(
         icon: Icons.local_florist_outlined,
         label: 'My Garden',
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const GardenScreen()),
+        trailing: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: (isPaid ? AppColors.healthGood : AppColors.primary).withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            isPaid ? 'UNLOCKED' : 'PRO / FARM',
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              color: isPaid ? AppColors.healthGood : AppColors.primaryDark,
+            ),
+          ),
         ),
+        onTap: () {
+          if (!isPaid) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const UpgradeScreen()),
+            );
+          } else {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const GardenScreen()),
+            );
+          }
+        },
       ),
       _MenuItem(
         icon: Icons.cloud_download_outlined,
@@ -607,19 +630,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           );
         },
       ),
-      _MenuItem(
+      _SwitchMenuItem(
         icon: Icons.auto_awesome,
-        label: 'AI Cloud Engine Enabled',
-        trailing: Switch(
-          value: ref.watch(aiEngineProvider),
-          onChanged: (val) {
-            ref.read(aiEngineProvider.notifier).toggle();
-          },
-          activeThumbColor: AppColors.primary,
-        ),
-        onTap: () {
-          ref.read(aiEngineProvider.notifier).toggle();
-        },
+        label: 'AI Cloud Engine',
+        subtitle: isLocked
+            ? 'Access locked — Free trial ended'
+            : (ref.watch(aiEngineProvider)
+                ? 'Cloud Vision & LLM Diagnosis active'
+                : 'Edge TFLite Model active (data saving)'),
+        value: !isLocked && ref.watch(aiEngineProvider),
+        badge: isLocked
+            ? Container(
+                margin: const EdgeInsets.only(left: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text('LOCKED', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: AppColors.error)),
+              )
+            : null,
+        onChanged: isLocked
+            ? (_) => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpgradeScreen()))
+            : (val) {
+                ref.read(aiEngineProvider.notifier).setEnabled(val);
+              },
       ),
       _MenuItem(
         icon: Icons.insights_rounded,
@@ -639,10 +674,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
           ),
         ),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const AnalyticsScreen()),
-        ),
+        onTap: () {
+          if (!isPaid) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const UpgradeScreen()),
+            );
+          } else {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AnalyticsScreen()),
+            );
+          }
+        },
       ),
       _MenuItem(
         icon: Icons.notifications_outlined,
@@ -798,6 +842,71 @@ class _MenuItem extends StatelessWidget {
         ),
         trailing: trailing ?? Icon(Icons.chevron_right, size: 18, color: AppColors.textMuted),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      ),
+    );
+  }
+}
+
+class _SwitchMenuItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String? subtitle;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+  final Widget? badge;
+
+  const _SwitchMenuItem({
+    required this.icon,
+    required this.label,
+    this.subtitle,
+    required this.value,
+    this.onChanged,
+    this.badge,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isEnabled = onChanged != null;
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppTokens.radiusMD),
+        border: Border.all(color: AppColors.lightBorder),
+      ),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: ListTile(
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: (value ? AppColors.primary : AppColors.lightTextMuted).withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: value ? AppColors.primary : AppColors.lightTextMuted, size: 20),
+        ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+              ),
+            ),
+            if (badge != null) badge!,
+          ],
+        ),
+        subtitle: subtitle != null
+            ? Text(
+                subtitle!,
+                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+              )
+            : null,
+        trailing: Switch.adaptive(
+          value: value,
+          onChanged: onChanged,
+          activeTrackColor: AppColors.primary,
+        ),
+        onTap: isEnabled ? () => onChanged!(!value) : null,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       ),
     );
   }

@@ -203,6 +203,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       trialDays: config?.trialDays ?? 2,
     );
 
+    final isAccessLocked = (trialInfo.isExpired || scanLimit?.isExpired == true || aiLimit?.isExpired == true) &&
+        !(liveUser?.isPaidActive ?? false);
+
     return Scaffold(
       backgroundColor: AppColors.lightBg,
       body: RefreshIndicator(
@@ -281,6 +284,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   flex: 3,
                   child: ElevatedButton.icon(
                     onPressed: () {
+                      if (isAccessLocked) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const UpgradeScreen()),
+                        );
+                        return;
+                      }
                       if (scanLimit != null && !scanLimit.canScan) {
                         if (scanLimit.isNotStarted) {
                           Navigator.push(
@@ -321,10 +331,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   flex: 2,
                   child: OutlinedButton.icon(
                     onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const ChatbotScreen()),
-                      );
+                      if (isAccessLocked || (aiLimit != null && !aiLimit.canChat && aiLimit.isExpired)) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const UpgradeScreen()),
+                        );
+                      } else if (aiLimit != null && aiLimit.isNotStarted) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const TrialActivationScreen()),
+                        );
+                      } else {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const ChatbotScreen()),
+                        );
+                      }
                     },
                     icon: const Icon(Icons.auto_awesome_rounded, size: 16, color: AppColors.primary),
                     label: const Text(
@@ -355,10 +377,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const RetailerDirectoryScreen()),
-                      );
+                      if (isAccessLocked) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const UpgradeScreen()),
+                        );
+                      } else {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const RetailerDirectoryScreen()),
+                        );
+                      }
                     },
                     icon: const Icon(Icons.storefront_rounded, size: 16, color: AppColors.primaryDark),
                     label: const Text(
@@ -385,49 +414,91 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             const SizedBox(height: 24),
 
             // ── Outbreak Radar Alert ───────────────────────────────────────
-            Container(
-              margin: const EdgeInsets.only(bottom: 16),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF7ED),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFFFEDD5)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFFFEDD5),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.radar_rounded, color: Color(0xFFEA580C), size: 20),
+            BouncingButton(
+              onTap: () {
+                if (isAccessLocked) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const UpgradeScreen()),
+                  );
+                }
+              },
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: isAccessLocked ? const Color(0xFFF8FAFC) : const Color(0xFFFFF7ED),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isAccessLocked ? const Color(0xFFE2E8F0) : const Color(0xFFFFEDD5),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Community Radar',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF9A3412),
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _outbreakMessage,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFFC2410C),
-                          ),
-                        ),
-                      ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: isAccessLocked ? const Color(0xFFF1F5F9) : const Color(0xFFFFEDD5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        isAccessLocked ? Icons.lock_outline_rounded : Icons.radar_rounded,
+                        color: isAccessLocked ? const Color(0xFF64748B) : const Color(0xFFEA580C),
+                        size: 20,
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                'Community Radar',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: isAccessLocked ? const Color(0xFF334155) : const Color(0xFF9A3412),
+                                ),
+                              ),
+                              if (isAccessLocked) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.error.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text(
+                                    'LOCKED',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.error,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            isAccessLocked
+                                ? 'Local outbreak detection locked. Upgrade to Pro/Farm to track nearby crop disease outbreaks.'
+                                : _outbreakMessage,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isAccessLocked ? const Color(0xFF64748B) : const Color(0xFFC2410C),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (isAccessLocked)
+                      const Icon(Icons.arrow_forward_ios_rounded, size: 13, color: Color(0xFF94A3B8)),
+                  ],
+                ),
               ),
             ).animate().fadeIn(duration: 400.ms, delay: 110.ms).slideY(begin: 0.04, end: 0, curve: Curves.easeOutCubic),
 
@@ -491,9 +562,68 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
               ),
             ).animate().fadeIn(duration: 400.ms, delay: 115.ms).slideY(begin: 0.04, end: 0, curve: Curves.easeOutCubic),
-            
+
             // ── Spray Window Widget ───────────────────────────────────────
-            if (_sprayWindow != null)
+            if (isAccessLocked)
+              Container(
+                margin: const EdgeInsets.only(bottom: 24),
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFEF2F2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.lock_clock_rounded, color: AppColors.error, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Spray Window & Climate Advisory',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.lightTextPrimary,
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Locked · Upgrade to Pro or Farm to view optimal chemical/organic spray timing',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.lightTextSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const UpgradeScreen()),
+                      ),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: const Text('Unlock', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                    ),
+                  ],
+                ),
+              ).animate().fadeIn(duration: 400.ms, delay: 120.ms).slideY(begin: 0.04, end: 0, curve: Curves.easeOutCubic)
+            else if (_sprayWindow != null)
               Container(
                 margin: const EdgeInsets.only(bottom: 24),
                 padding: const EdgeInsets.all(20),
@@ -518,7 +648,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Spray Window: \${_sprayWindow!.isOptimal ? "Optimal" : "Not Ideal"}',
+                            'Spray Window: ${_sprayWindow!.isOptimal ? "Optimal" : "Not Ideal"}',
                             style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
@@ -540,7 +670,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(
-                          "Next best time: \${_sprayWindow!.nextBestTime}",
+                          "Next best time: ${_sprayWindow!.nextBestTime}",
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -552,9 +682,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _buildWeatherStat(Icons.thermostat, '\${_sprayWindow!.current.temperature}°C', _sprayWindow!.isOptimal),
-                        _buildWeatherStat(Icons.air, '\${_sprayWindow!.current.windSpeed} km/h', _sprayWindow!.isOptimal),
-                        _buildWeatherStat(Icons.water_drop, '\${_sprayWindow!.current.precipitation} mm', _sprayWindow!.isOptimal),
+                        _buildWeatherStat(Icons.thermostat, '${_sprayWindow!.current.temperature}°C', _sprayWindow!.isOptimal),
+                        _buildWeatherStat(Icons.air, '${_sprayWindow!.current.windSpeed} km/h', _sprayWindow!.isOptimal),
+                        _buildWeatherStat(Icons.water_drop, '${_sprayWindow!.current.precipitation} mm', _sprayWindow!.isOptimal),
                       ],
                     ),
                   ],
@@ -577,7 +707,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 if (_recentScans.isNotEmpty)
                   TextButton(
                     onPressed: () {
-                      ref.read(navIndexProvider.notifier).state = 2;
+                      if (isAccessLocked) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const UpgradeScreen()),
+                        );
+                      } else {
+                        ref.read(navIndexProvider.notifier).state = 2;
+                      }
                     },
                     child: const Text(
                       'View all',
@@ -648,7 +785,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ..._recentScans.asMap().entries.map((entry) {
                 final index = entry.key;
                 final scan = entry.value;
-                return _buildRecentScanCard(scan)
+                return _buildRecentScanCard(scan, isAccessLocked: isAccessLocked)
                     .animate()
                     .fadeIn(duration: 300.ms, delay: (180 + (index * 40)).ms)
                     .slideX(begin: 0.03, end: 0, curve: Curves.easeOutCubic);
@@ -968,6 +1105,59 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
             ],
           ),
+          if (isExpired) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFECACA)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.lock_clock_rounded, color: AppColors.error, size: 20),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Trial Ended — Features Locked',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.error,
+                          ),
+                        ),
+                        SizedBox(height: 1),
+                        Text(
+                          'Must pay for Pro or Farm to continue using the app',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF991B1B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const UpgradeScreen()),
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.error,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      minimumSize: const Size(58, 30),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: const Text('Upgrade', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1015,17 +1205,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  Widget _buildRecentScanCard(ScanResult scan) {
+  Widget _buildRecentScanCard(ScanResult scan, {bool isAccessLocked = false}) {
     final isHealthy = scan.isHealthy;
     final statusColor = isHealthy ? AppColors.primary : AppColors.warning;
 
     return BouncingButton(
       scaleFactor: 0.98,
       onTap: () {
-        Navigator.push(
-          context,
-          SmoothPageRoute(page: ScanDetailScreen(scan: scan)),
-        );
+        if (isAccessLocked) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const UpgradeScreen()),
+          );
+        } else {
+          Navigator.push(
+            context,
+            SmoothPageRoute(page: ScanDetailScreen(scan: scan)),
+          );
+        }
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),

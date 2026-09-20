@@ -10,19 +10,24 @@ import '../../models/scan_result.dart';
 import '../../theme/colors.dart';
 import '../../theme/design_tokens.dart';
 import '../../widgets/health_score_ring.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../providers/user_provider.dart';
+import '../../providers/app_config_provider.dart';
+import '../../services/trial_service.dart';
+import '../subscription/upgrade_screen.dart';
 import '../ai/chatbot_screen.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
-class ScanDetailScreen extends StatefulWidget {
+class ScanDetailScreen extends ConsumerStatefulWidget {
   final ScanResult scan;
 
   const ScanDetailScreen({super.key, required this.scan});
 
   @override
-  State<ScanDetailScreen> createState() => _ScanDetailScreenState();
+  ConsumerState<ScanDetailScreen> createState() => _ScanDetailScreenState();
 }
 
-class _ScanDetailScreenState extends State<ScanDetailScreen> {
+class _ScanDetailScreenState extends ConsumerState<ScanDetailScreen> {
   late final String _advice;
 
   @override
@@ -284,6 +289,12 @@ class _ScanDetailScreenState extends State<ScanDetailScreen> {
   }
 
   Widget _buildActions(BuildContext context) {
+    final user = ref.watch(currentUserProvider).value;
+    final config = ref.watch(appConfigProvider).value ?? const AppConfig();
+    final trialInfo = TrialService.getTrialInfo(user, trialDays: config.trialDays);
+    final isPaid = user?.isPaidActive ?? false;
+    final isLocked = !isPaid && trialInfo.isExpired;
+
     final initialMsg = widget.scan.isHealthy
         ? 'Tell me how to keep my ${widget.scan.plantName} healthy, productive, and growing well.'
         : 'Tell me more about ${widget.scan.diseaseName} on ${widget.scan.plantName}. Health score: ${widget.scan.healthScore}/100. Confidence: ${(widget.scan.diseaseConfidence * 100).round()}%. What are the best treatments, remedies, and prevention tips?';
@@ -292,17 +303,26 @@ class _ScanDetailScreenState extends State<ScanDetailScreen> {
       children: [
         Expanded(
           child: OutlinedButton.icon(
-            icon: const Icon(Icons.chat_bubble_outline, size: 18),
-            label: const Text('Ask AI'),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ChatbotScreen(initialMessage: initialMsg),
-              ),
-            ),
+            icon: Icon(isLocked ? Icons.lock_outline_rounded : Icons.chat_bubble_outline, size: 18),
+            label: Text(isLocked ? 'Ask AI (Locked)' : 'Ask AI'),
+            onPressed: () {
+              if (isLocked) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const UpgradeScreen()),
+                );
+              } else {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ChatbotScreen(initialMessage: initialMsg),
+                  ),
+                );
+              }
+            },
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.primaryDark,
-              side: const BorderSide(color: AppColors.primary),
+              foregroundColor: isLocked ? AppColors.error : AppColors.primaryDark,
+              side: BorderSide(color: isLocked ? AppColors.error : AppColors.primary),
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppTokens.radiusPill),
