@@ -109,6 +109,9 @@ export function AppProvider({ children }) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'users' },
         (payload) => {
+          const isUserAdmin = payload.new?.email?.toLowerCase().trim() === DESIGNATED_ADMIN_EMAIL.toLowerCase().trim();
+          if (isUserAdmin) return;
+
           if (payload.eventType === 'INSERT') {
             setUsers(prev => [payload.new, ...prev.filter(u => u.uid !== payload.new.uid)]);
           } else if (payload.eventType === 'UPDATE') {

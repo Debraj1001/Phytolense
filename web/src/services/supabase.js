@@ -166,13 +166,30 @@ export async function saveAppConfig(updates) {
 // ─── Users Management ────────────────────────────────────────────────────────
 export async function fetchUsersList() {
   try {
+    // Collect admin emails to ensure administrators are never mixed into end-user client roster
+    const adminEmails = new Set();
+    if (DESIGNATED_ADMIN_EMAIL) {
+      adminEmails.add(DESIGNATED_ADMIN_EMAIL.toLowerCase().trim());
+    }
+
+    try {
+      const { data: adminRows } = await supabaseAdmin
+        .from('admins')
+        .select('email');
+      if (adminRows) {
+        adminRows.forEach(a => {
+          if (a.email) adminEmails.add(a.email.toLowerCase().trim());
+        });
+      }
+    } catch (_) {}
+
     const { data, error } = await supabaseAdmin
       .from('users')
       .select('*')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    return (data || []).filter(u => !adminEmails.has(u.email?.toLowerCase().trim()));
   } catch (err) {
     console.error('Error fetching users:', err);
     return [];

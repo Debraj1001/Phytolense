@@ -20,6 +20,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import ConfirmModal from '../Common/ConfirmModal';
+import { DESIGNATED_ADMIN_EMAIL } from '../../services/supabase';
 
 function UserAvatar({ url, name, size = 36 }) {
   const [hasError, setHasError] = useState(false);
@@ -81,8 +82,13 @@ export default function UserManagementPage() {
     setConfirmModal(prev => ({ ...prev, isOpen: false }));
   };
 
+  // Exclude administrative accounts from client user management roster
+  const clientUsers = users.filter(u => 
+    u.email?.toLowerCase().trim() !== DESIGNATED_ADMIN_EMAIL.toLowerCase().trim()
+  );
+
   // Filter users
-  const filteredUsers = users.filter(u => {
+  const filteredUsers = clientUsers.filter(u => {
     const q = searchQuery.toLowerCase();
     const matchesSearch = !q || 
       (u.email && u.email.toLowerCase().includes(q)) ||
@@ -249,7 +255,7 @@ export default function UserManagementPage() {
                 className={`btn btn-sm ${tierFilter === t ? 'btn-primary' : 'btn-white'}`}
                 style={{ textTransform: 'capitalize' }}
               >
-                {t === 'all' ? `All (${users.length})` : t}
+                {t === 'all' ? `All (${clientUsers.length})` : t}
               </button>
             ))}
           </div>
