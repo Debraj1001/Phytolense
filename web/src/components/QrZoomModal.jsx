@@ -13,7 +13,7 @@ export default function QrZoomModal() {
 
   // Target download URL configured by Admin
   const targetUrl = appConfig?.download_url_android || 
-    'https://github.com/Debraj1001/Phytolense/releases/download/v1.0.0/phytolens-v1.0.0.apk';
+    'https://github.com/Debraj1001/Phytolense/releases/download/v1.0.1/phytolens-v1.0.1.apk';
 
   // Generate ultra-crisp vector SVG QR
   useEffect(() => {

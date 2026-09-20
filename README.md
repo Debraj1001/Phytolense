@@ -2,8 +2,8 @@
 
 <div align="center">
 
-[![Release](https://img.shields.io/badge/Release-v1.0.0-10B981?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Debraj1001/Phytolense/releases/tag/v1.0.0)
-[![APK Download](https://img.shields.io/badge/Download-APK_(136.6_MB)-059669?style=for-the-badge&logo=android&logoColor=white)](https://github.com/Debraj1001/Phytolense/releases/download/v1.0.0/phytolens-v1.0.0.apk)
+[![Release](https://img.shields.io/badge/Release-v1.0.1-10B981?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Debraj1001/Phytolense/releases/tag/v1.0.1)
+[![APK Download](https://img.shields.io/badge/Download-APK_(136.6_MB)-059669?style=for-the-badge&logo=android&logoColor=white)](https://github.com/Debraj1001/Phytolense/releases/download/v1.0.1/phytolens-v1.0.1.apk)
 [![Web Portal](https://img.shields.io/badge/Live_Portal-phytolense.netlify.app-00C7B7?style=for-the-badge&logo=netlify&logoColor=white)](https://phytolense.netlify.app)
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.x-0175C2?style=for-the-badge&logo=dart&logoColor=white)](https://dart.dev)
@@ -48,8 +48,8 @@ The ecosystem includes:
 
 | Platform | Channel | Status / Link |
 | :--- | :--- | :--- |
-| **Android APK** | Direct GitHub CDN | [**Download `phytolens-v1.0.0.apk` (136.6 MB)**](https://github.com/Debraj1001/Phytolense/releases/download/v1.0.0/phytolens-v1.0.0.apk) |
-| **Release Page** | GitHub Releases | [**PhytoLens v1.0.0 Release Notes & Assets**](https://github.com/Debraj1001/Phytolense/releases/tag/v1.0.0) |
+| **Android APK** | Direct GitHub CDN | [**Download `phytolens-v1.0.1.apk` (136.6 MB)**](https://github.com/Debraj1001/Phytolense/releases/download/v1.0.1/phytolens-v1.0.1.apk) |
+| **Release Page** | GitHub Releases | [**PhytoLens v1.0.1 Release Notes & Assets**](https://github.com/Debraj1001/Phytolense/releases/tag/v1.0.1) |
 | **Live Web App** | Netlify Production | [**phytolense.netlify.app**](https://phytolense.netlify.app) |
 | **Google Play Store** | Official Distribution | ⏳ *In Review — Direct APK available above* |
 | **Apple App Store** | iOS TestFlight | ⏳ *Closed Beta Preview in progress* |

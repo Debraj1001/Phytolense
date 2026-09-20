@@ -4,7 +4,7 @@ class AppConstants {
   // App Info
   static const String appName = 'PhytoLens';
   static const String appTagline = 'Your Plant\'s Best Health Companion';
-  static const String appVersion = '1.0.0';
+  static const String appVersion = '1.0.1';
 
   // Subscription Tiers
   static const String tierFree = 'free';

@@ -24,7 +24,7 @@ export default function QrManagerPage() {
   useEffect(() => {
     if (appConfig) {
       setFormData({
-        download_url_android: appConfig.download_url_android || 'https://github.com/Debraj1001/Phytolense/releases/download/v1.0.0/phytolens-v1.0.0.apk',
+        download_url_android: appConfig.download_url_android || 'https://github.com/Debraj1001/Phytolense/releases/download/v1.0.1/phytolens-v1.0.1.apk',
         download_url_playstore: appConfig.download_url_playstore || 'https://play.google.com/store/apps/details?id=com.phytolens.app',
         download_url_ios: appConfig.download_url_ios || 'https://testflight.apple.com/join/phytolens',
         download_url_web: appConfig.download_url_web || 'https://phytolens.agritech.org',

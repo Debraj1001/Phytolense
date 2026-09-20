@@ -17,8 +17,8 @@ import {
   Info
 } from 'lucide-react';
 
-const OFFICIAL_APK_DOWNLOAD_URL = 'https://github.com/Debraj1001/Phytolense/releases/download/v1.0.0/phytolens-v1.0.0.apk';
-const OFFICIAL_GITHUB_RELEASE_URL = 'https://github.com/Debraj1001/Phytolense/releases/tag/v1.0.0';
+const OFFICIAL_APK_DOWNLOAD_URL = 'https://github.com/Debraj1001/Phytolense/releases/download/v1.0.1/phytolens-v1.0.1.apk';
+const OFFICIAL_GITHUB_RELEASE_URL = 'https://github.com/Debraj1001/Phytolense/releases/tag/v1.0.1';
 
 export default function QrDownloadSection() {
   const { appConfig, setQrZoomModalOpen, showToast } = useApp();
@@ -93,7 +93,7 @@ export default function QrDownloadSection() {
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
             <span className="badge badge-emerald" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
               <Sparkles size={12} />
-              Official v1.0.0 Production Release
+              Official v1.0.1 Production Release
             </span>
             <span className="badge badge-mint">
               100% Offline Edge AI Ready
@@ -213,7 +213,7 @@ export default function QrDownloadSection() {
               <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
                 <span className="badge badge-mint" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                   <ShieldCheck size={12} />
-                  Official v1.0.0
+                  Official v1.0.1
                 </span>
                 <span className="badge badge-emerald">136.6 MB APK</span>
                 <span className="badge badge-amber">Production Build</span>
@@ -233,7 +233,7 @@ export default function QrDownloadSection() {
                 {/* 1. Primary Live Download Button */}
                 <a
                   href={androidUrl}
-                  download="phytolens-v1.0.0.apk"
+                  download="phytolens-v1.0.1.apk"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn btn-primary"
@@ -257,7 +257,7 @@ export default function QrDownloadSection() {
                     </div>
                     <div style={{ textAlign: 'left' }}>
                       <div style={{ fontSize: '14px', fontWeight: 800 }}>Download Android APK</div>
-                      <div style={{ fontSize: '11px', opacity: 0.9 }}>Direct Release (.apk) · v1.0.0 · Ready Now</div>
+                      <div style={{ fontSize: '11px', opacity: 0.9 }}>Direct Release (.apk) · v1.0.1 · Ready Now</div>
                     </div>
                   </div>
                   <Download size={20} />

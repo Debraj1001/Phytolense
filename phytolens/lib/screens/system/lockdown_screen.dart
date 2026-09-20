@@ -183,7 +183,7 @@ class LockdownScreen extends StatelessWidget {
 
                 // ── Version Stamp ─────────────────────────────────────────
                 Text(
-                  'PhytoLens Agronomic Core v1.0.0 • Protected Gateway',
+                  'PhytoLens Agronomic Core v1.0.1 • Protected Gateway',
                   style: GoogleFonts.spaceGrotesk(
                     fontSize: 11,
                     color: const Color(0xFF475569),
