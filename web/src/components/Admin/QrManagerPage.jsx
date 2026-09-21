@@ -9,11 +9,16 @@ export default function QrManagerPage() {
 
   const [formData, setFormData] = useState({
     download_url_android: '',
-    latest_version: '1.0.2',
+    latest_version: '1.0.3',
     download_url_playstore: '',
     download_url_ios: '',
     download_url_web: '',
     qr_primary_target: 'android',
+    qr_title: 'Download PhytoLens APK',
+    qr_subtitle: 'Scan with any smartphone camera to download the Android app directly',
+    qr_bg_color: '#ffffff',
+    qr_fg_color: '#15803d',
+    qr_include_logo: true,
     qr_foreground_color: '#0F172A',
     qr_error_correction: 'H',
     qr_logo_enabled: true
@@ -25,8 +30,8 @@ export default function QrManagerPage() {
   useEffect(() => {
     if (appConfig) {
       setFormData({
-        download_url_android: appConfig.download_url_android || 'https://github.com/Debraj1001/Phytolense/releases/download/v1.0.2/app-release.apk',
-        latest_version: appConfig.latest_version || '1.0.2',
+        download_url_android: appConfig.download_url_android || 'https://github.com/Debraj1001/Phytolense/releases/download/v1.0.3/app-release.apk',
+        latest_version: appConfig.latest_version || '1.0.3',
         download_url_playstore: appConfig.download_url_playstore || 'https://play.google.com/store/apps/details?id=com.phytolens.app',
         download_url_ios: appConfig.download_url_ios || 'https://testflight.apple.com/join/phytolens',
         download_url_web: appConfig.download_url_web || 'https://phytolens.agritech.org',
@@ -167,7 +172,7 @@ export default function QrManagerPage() {
 
               <div>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px' }}>
-                  🏷️ App Version Tag (e.g. 1.0.2)
+                  🏷️ App Version Tag (e.g. 1.0.3)
                 </label>
                 <input
                   type="text"
@@ -175,7 +180,7 @@ export default function QrManagerPage() {
                   value={formData.latest_version}
                   onChange={(e) => handleChange('latest_version', e.target.value)}
                   className="neo-input"
-                  placeholder="1.0.2"
+                  placeholder="1.0.3"
                 />
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
                   Displayed on the public download badges and navbar (auto-synced with APK link).

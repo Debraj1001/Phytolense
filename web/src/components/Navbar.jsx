@@ -5,7 +5,7 @@ import { Shield, Sparkles, QrCode, Smartphone, Layers, Leaf, ExternalLink } from
 
 export default function Navbar() {
   const { currentView, setCurrentView, adminUser, setLoginModalOpen, setAdminSubPage, appConfig } = useApp();
-  const version = appConfig?.latest_version || '1.0.2';
+  const version = appConfig?.latest_version || '1.0.3';
   const displayVersion = version.startsWith('v') ? version : `v${version}`;
 
   const handleAdminClick = () => {
