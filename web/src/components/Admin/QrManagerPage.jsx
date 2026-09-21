@@ -9,6 +9,7 @@ export default function QrManagerPage() {
 
   const [formData, setFormData] = useState({
     download_url_android: '',
+    latest_version: '1.0.2',
     download_url_playstore: '',
     download_url_ios: '',
     download_url_web: '',
@@ -24,7 +25,8 @@ export default function QrManagerPage() {
   useEffect(() => {
     if (appConfig) {
       setFormData({
-        download_url_android: appConfig.download_url_android || 'https://github.com/Debraj1001/Phytolense/releases/download/v1.0.1/phytolens-v1.0.1.apk',
+        download_url_android: appConfig.download_url_android || 'https://github.com/Debraj1001/Phytolense/releases/download/v1.0.2/app-release.apk',
+        latest_version: appConfig.latest_version || '1.0.2',
         download_url_playstore: appConfig.download_url_playstore || 'https://play.google.com/store/apps/details?id=com.phytolens.app',
         download_url_ios: appConfig.download_url_ios || 'https://testflight.apple.com/join/phytolens',
         download_url_web: appConfig.download_url_web || 'https://phytolens.agritech.org',
@@ -63,6 +65,15 @@ export default function QrManagerPage() {
       }
     });
   }, [activeTargetUrl, formData.qr_foreground_color, formData.qr_error_correction]);
+
+  const handleAndroidUrlChange = (val) => {
+    const matchedVersion = val.match(/\/releases\/download\/v?([^\/]+)/)?.[1];
+    setFormData(prev => ({
+      ...prev,
+      download_url_android: val,
+      ...(matchedVersion ? { latest_version: matchedVersion.replace(/^v/, '') } : {})
+    }));
+  };
 
   const handleChange = (field, val) => {
     setFormData(prev => ({ ...prev, [field]: val }));
@@ -145,12 +156,29 @@ export default function QrManagerPage() {
                   type="url"
                   required
                   value={formData.download_url_android}
-                  onChange={(e) => handleChange('download_url_android', e.target.value)}
+                  onChange={(e) => handleAndroidUrlChange(e.target.value)}
                   className="neo-input"
                   placeholder="https://.../phytolens-release.apk"
                 />
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
                   Direct APK file link. Recommended for rural growers.
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px' }}>
+                  🏷️ App Version Tag (e.g. 1.0.2)
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.latest_version}
+                  onChange={(e) => handleChange('latest_version', e.target.value)}
+                  className="neo-input"
+                  placeholder="1.0.2"
+                />
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  Displayed on the public download badges and navbar (auto-synced with APK link).
                 </div>
               </div>
 

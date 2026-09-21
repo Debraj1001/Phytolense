@@ -4,7 +4,9 @@ import { useApp } from '../context/AppContext';
 import { Shield, Sparkles, QrCode, Smartphone, Layers, Leaf, ExternalLink } from 'lucide-react';
 
 export default function Navbar() {
-  const { currentView, setCurrentView, adminUser, setLoginModalOpen, setAdminSubPage } = useApp();
+  const { currentView, setCurrentView, adminUser, setLoginModalOpen, setAdminSubPage, appConfig } = useApp();
+  const version = appConfig?.latest_version || '1.0.2';
+  const displayVersion = version.startsWith('v') ? version : `v${version}`;
 
   const handleAdminClick = () => {
     if (adminUser) {
@@ -67,7 +69,7 @@ export default function Navbar() {
               gap: '6px'
             }}>
               PhytoLens
-              <span className="badge badge-emerald" style={{ fontSize: '10px', padding: '2px 6px' }}>v1.0.1</span>
+              <span className="badge badge-emerald" style={{ fontSize: '10px', padding: '2px 6px' }}>{displayVersion}</span>
             </div>
             <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 500 }}>
               AI Plant Pathology & Agronomy Engine

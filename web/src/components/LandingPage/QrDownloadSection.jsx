@@ -17,8 +17,8 @@ import {
   Info
 } from 'lucide-react';
 
-const OFFICIAL_APK_DOWNLOAD_URL = 'https://github.com/Debraj1001/Phytolense/releases/download/v1.0.1/phytolens-v1.0.1.apk';
-const OFFICIAL_GITHUB_RELEASE_URL = 'https://github.com/Debraj1001/Phytolense/releases/tag/v1.0.1';
+const OFFICIAL_APK_DOWNLOAD_URL = 'https://github.com/Debraj1001/Phytolense/releases/download/v1.0.2/app-release.apk';
+const OFFICIAL_GITHUB_RELEASE_URL = 'https://github.com/Debraj1001/Phytolense/releases/tag/v1.0.2';
 
 export default function QrDownloadSection() {
   const { appConfig, setQrZoomModalOpen, showToast } = useApp();
@@ -30,7 +30,18 @@ export default function QrDownloadSection() {
   const playStoreUrl = appConfig?.download_url_playstore || 'https://play.google.com/store/apps/details?id=com.phytolens.app';
   const iosUrl = appConfig?.download_url_ios || 'https://testflight.apple.com/join/phytolens';
   const webUrl = appConfig?.download_url_web || 'https://phytolens.agritech.org';
-  const githubReleaseUrl = appConfig?.download_url_github_release || OFFICIAL_GITHUB_RELEASE_URL;
+  
+  // Dynamic version extraction
+  const version = appConfig?.latest_version || (androidUrl.match(/\/releases\/download\/v?([^\/]+)/)?.[1]) || '1.0.2';
+  const displayVersion = version.startsWith('v') ? version : `v${version}`;
+  const apkSize = appConfig?.apk_size || '124.3 MB APK';
+  const apkFilename = androidUrl.split('/').pop() || `phytolens-${displayVersion}.apk`;
+
+  // Dynamic GitHub Release URL
+  const githubReleaseUrl = appConfig?.download_url_github_release || 
+    (androidUrl.includes('/releases/download/') 
+      ? androidUrl.substring(0, androidUrl.indexOf('/download/')) + '/tag/' + (androidUrl.match(/\/releases\/download\/([^\/]+)/)?.[1] || displayVersion)
+      : OFFICIAL_GITHUB_RELEASE_URL);
 
   // Dynamic QR Code Settings from Database Realtime
   const qrTarget = appConfig?.qr_primary_target === 'playstore' 
@@ -93,7 +104,7 @@ export default function QrDownloadSection() {
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
             <span className="badge badge-emerald" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
               <Sparkles size={12} />
-              Official v1.0.1 Production Release
+              Official {displayVersion} Production Release
             </span>
             <span className="badge badge-mint">
               100% Offline Edge AI Ready
@@ -213,9 +224,9 @@ export default function QrDownloadSection() {
               <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
                 <span className="badge badge-mint" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                   <ShieldCheck size={12} />
-                  Official v1.0.1
+                  Official {displayVersion}
                 </span>
-                <span className="badge badge-emerald">136.6 MB APK</span>
+                <span className="badge badge-emerald">{apkSize}</span>
                 <span className="badge badge-amber">Production Build</span>
               </div>
 
@@ -233,7 +244,7 @@ export default function QrDownloadSection() {
                 {/* 1. Primary Live Download Button */}
                 <a
                   href={androidUrl}
-                  download="phytolens-v1.0.1.apk"
+                  download={apkFilename}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn btn-primary"
@@ -257,7 +268,7 @@ export default function QrDownloadSection() {
                     </div>
                     <div style={{ textAlign: 'left' }}>
                       <div style={{ fontSize: '14px', fontWeight: 800 }}>Download Android APK</div>
-                      <div style={{ fontSize: '11px', opacity: 0.9 }}>Direct Release (.apk) · v1.0.1 · Ready Now</div>
+                      <div style={{ fontSize: '11px', opacity: 0.9 }}>Direct Release (.apk) · {displayVersion} · Ready Now</div>
                     </div>
                   </div>
                   <Download size={20} />

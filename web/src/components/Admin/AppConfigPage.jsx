@@ -106,7 +106,7 @@ export default function AppConfigPage() {
           garden_enabled: true,
           bulk_export_enabled: true,
           maintenance_mode: false,
-          latest_version: '1.0.1'
+          latest_version: '1.0.2'
         };
         setFormData(prev => ({ ...prev, ...defaults }));
         showToast('Reset form to factory defaults. Click Save to persist.');

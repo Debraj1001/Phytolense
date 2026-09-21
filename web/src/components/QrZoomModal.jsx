@@ -11,9 +11,16 @@ export default function QrZoomModal() {
   const [copied, setCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Target download URL configured by Admin
-  const targetUrl = appConfig?.download_url_android || 
-    'https://github.com/Debraj1001/Phytolense/releases/download/v1.0.1/phytolens-v1.0.1.apk';
+  // Target download URL configured by Admin (matches primary target selected)
+  const androidUrl = appConfig?.download_url_android || 
+    'https://github.com/Debraj1001/Phytolense/releases/download/v1.0.2/app-release.apk';
+  const targetUrl = appConfig?.qr_primary_target === 'playstore' 
+    ? (appConfig?.download_url_playstore || 'https://play.google.com/store/apps/details?id=com.phytolens.app')
+    : appConfig?.qr_primary_target === 'ios'
+    ? (appConfig?.download_url_ios || 'https://testflight.apple.com/join/phytolens')
+    : appConfig?.qr_primary_target === 'web'
+    ? (appConfig?.download_url_web || 'https://phytolens.agritech.org')
+    : androidUrl;
 
   // Generate ultra-crisp vector SVG QR
   useEffect(() => {
