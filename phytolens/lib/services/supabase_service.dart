@@ -288,6 +288,13 @@ class SupabaseService {
   }
 
   Future<void> deleteScan(String scanId, {String? userId}) async {
+    // Only attempt cloud delete if it is a valid UUID format
+    final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    if (!uuidRegex.hasMatch(scanId)) {
+      debugPrint('Skipping cloud delete for non-UUID / local-only scan ID: $scanId');
+      return;
+    }
+
     await _client.from(AppConstants.tableScanHistory).delete().eq('id', scanId);
     try {
       await _client.from('scans').delete().eq('id', scanId);

@@ -454,14 +454,71 @@ class _ScanHistoryScreenState extends ConsumerState<ScanHistoryScreen> {
     // 2. Always delete from local SQLite — this is the source of truth on-device
     try {
       await _localDb.deleteScan(scan.id);
+      await _localDb.clearPendingDeletion(scan.id);
     } catch (e) {
       debugPrint('Local delete error: $e');
+    }
+
+    final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    final isCloudScan = uuidRegex.hasMatch(scan.id);
+
+    // If it's a local/offline scan that never reached the cloud, local deletion is completely finished!
+    if (!isCloudScan) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    ref.tr('deleted_successfully'),
+                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.primary,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            margin: const EdgeInsets.only(bottom: 90, left: 16, right: 16),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
     }
 
     // 3. Try Supabase delete; on failure, queue for later sync
     try {
       final uid = Supabase.instance.client.auth.currentUser?.id;
       await _supabase.deleteScan(scan.id, userId: uid ?? scan.userId);
+      await _localDb.clearPendingDeletion(scan.id);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    ref.tr('deleted_successfully'),
+                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.primary,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            margin: const EdgeInsets.only(bottom: 90, left: 16, right: 16),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
     } catch (e) {
       debugPrint('Supabase delete deferred (offline): $e');
       // Queue for background sync — do NOT reload/revert the UI
@@ -478,7 +535,7 @@ class _ScanHistoryScreenState extends ConsumerState<ScanHistoryScreen> {
                 Expanded(
                   child: Text(
                     ref.tr('deleted_offline'),
-                    style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
                   ),
                 ),
               ],

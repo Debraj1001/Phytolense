@@ -301,6 +301,12 @@ class LocalDatabase {
 
   /// Queue a scan for deferred Supabase deletion (used when offline)
   Future<void> queuePendingDeletion(String scanId, String userId) async {
+    final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    if (!uuidRegex.hasMatch(scanId)) {
+      debugPrint('Skipping pending deletion queue for local-only scan: $scanId');
+      return;
+    }
+
     final db = await database;
     await db.insert(
       'pending_deletions',

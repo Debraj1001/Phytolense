@@ -123,9 +123,14 @@ class SyncService {
       if (pending.isEmpty) return;
 
       debugPrint('🗑️ Syncing ${pending.length} pending deletions...');
+      final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
       for (final row in pending) {
         final scanId = row['scan_id'] as String;
         final userId = row['user_id'] as String;
+        if (!uuidRegex.hasMatch(scanId)) {
+          await _localDb.clearPendingDeletion(scanId);
+          continue;
+        }
         try {
           await _supabase.deleteScan(scanId, userId: userId);
           await _localDb.clearPendingDeletion(scanId);
