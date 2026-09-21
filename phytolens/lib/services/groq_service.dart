@@ -66,7 +66,7 @@ CRITICAL INSTRUCTIONS:
 3. NEVER output code, programming syntax, HTML tags, or technical markup.
 4. NEVER wrap your response in code fences or backticks.
 5. Use simple, conversational language. Write like a friendly expert, not a computer.
-6. Use bullet points (•) for lists, not markdown syntax.
+6. Use Markdown formatting (bolding **, bullet points -, numbered lists) to make your response highly organized and easy to read. Highlight key terms.
 7. $langDirective
 
 USER DATABASE & APP CONTEXT:
@@ -118,36 +118,35 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
   // Farm  → Full     (+ organic remedies, prevention calendar, yield impact)
   // ═══════════════════════════════════════════════════════════════════════════
 
-  /// Basic advice for Free tier — short and actionable.
   Future<String> getBasicAdvice({
     required String plantName,
     required String diseaseName,
     required int healthScore,
   }) async {
-    final prompt = 'Plant: $plantName\nDisease: $diseaseName\nHealth Score: $healthScore/100\n\nGive a 2-3 sentence summary and the most important action to take now.';
+    final lang = LanguageService().language.nativeName;
+    final prompt = 'Plant: $plantName\nDisease: $diseaseName\nHealth Score: $healthScore/100\n\nGive a 2-3 sentence summary and the most important action to take now. (You are generating a FREE tier report, keep it brief and simple).\n\nIMPORTANT: Respond EXCLUSIVELY in $lang.';
 
     return await _chat(prompt, maxTokens: 150);
   }
 
-  /// Detailed advice for Pro tier — the standard 5-section report.
   Future<String> getDiseaseAdvice({
     required String plantName,
     required String diseaseName,
     required int healthScore,
   }) async {
-    final prompt = 'Plant: $plantName\nDisease: $diseaseName\nHealth Score: $healthScore/100\n\nExplain this disease, why it happens, treatment steps, prevention, and organic remedies. Be concise and practical.';
+    final lang = LanguageService().language.nativeName;
+    final prompt = 'Plant: $plantName\nDisease: $diseaseName\nHealth Score: $healthScore/100\n\nExplain this disease, why it happens, treatment steps, prevention, and organic remedies. Use clear markdown headers and bullet points. (You are generating a PRO tier report, be detailed and structured).\n\nIMPORTANT: Respond EXCLUSIVELY in $lang.';
 
     return await _chat(prompt);
   }
 
-  /// Full comprehensive report for Farm tier — everything a professional
-  /// farmer needs to protect their crop and maximize yield.
   Future<String> getFullReport({
     required String plantName,
     required String diseaseName,
     required int healthScore,
   }) async {
-    final prompt = 'Plant: $plantName\nDisease: $diseaseName\nHealth Score: $healthScore/100\n\nProvide a COMPREHENSIVE crop health report with disease identification, treatment steps, organic remedies, chemical options, prevention calendar, and yield impact. Use simple language.';
+    final lang = LanguageService().language.nativeName;
+    final prompt = 'Plant: $plantName\nDisease: $diseaseName\nHealth Score: $healthScore/100\n\nProvide a COMPREHENSIVE crop health report with disease identification, treatment steps, organic remedies, chemical options, prevention calendar, and yield impact. Use clear markdown tables and bullet points. (You are generating a FARM tier report, be extremely comprehensive and professional).\n\nIMPORTANT: Respond EXCLUSIVELY in $lang.';
 
     return await _chat(prompt, maxTokens: 1200);
   }
@@ -171,7 +170,7 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
     }
 
     try {
-      switch (tier) {
+      switch (tier.toLowerCase()) {
         case 'farm':
           return await getFullReport(
             plantName: plantName,
@@ -287,10 +286,11 @@ If you DO see a plant that was missed, respond with:
 
     try {
       final sysPrompt = await _buildSystemPrompt();
+      final lang = LanguageService().language.nativeName;
       final messages = <Map<String, String>>[
         {'role': 'system', 'content': sysPrompt},
         ...history,
-        {'role': 'user', 'content': userMessage},
+        {'role': 'user', 'content': '$userMessage\n\n[Respond EXCLUSIVELY in $lang]'},
       ];
 
       final response = await _postWithFallback(

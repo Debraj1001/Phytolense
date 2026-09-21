@@ -16,6 +16,7 @@ import '../../services/plantnet_service.dart';
 import '../../services/scan_limiter.dart';
 import '../../services/sync_service.dart';
 import '../../services/permission_service.dart';
+import '../../services/local_llm_service.dart';
 import '../../data/local_database.dart';
 import '../../models/scan_result.dart';
 import '../../theme/colors.dart';
@@ -228,13 +229,25 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
         } catch (e) {
           debugPrint('Online report skipped/failed: $e');
           aiSource = 'offline';
-          if (mlResult.treatmentData != null) {
-            final td = mlResult.treatmentData!;
-            remedy = "### Offline Diagnosis: ${td['status']}\n\n"
-                     "**Severity:** ${td['severity']}\n"
-                     "**Immediate Action:** ${td['action']}\n\n"
-                     "**Bio-Organic Remedy:** ${td['bio_remedy']}\n\n"
-                     "**Chemical Alternative:** ${td['chemical_remedy']}";
+          try {
+            remedy = await LocalLLMService().getTieredAdvice(
+              tier: userTier,
+              plantName: plantName,
+              diseaseName: diseaseName,
+              healthScore: healthScore,
+              severityPercent: mlResult.healthScore < 100 ? (100 - mlResult.healthScore) : 0,
+              tfliteLabel: diseaseName,
+            );
+          } catch (offlineErr) {
+            debugPrint('Offline report failed: $offlineErr');
+            if (mlResult.treatmentData != null) {
+              final td = mlResult.treatmentData!;
+              remedy = "### Offline Diagnosis: ${td['status']}\n\n"
+                       "**Severity:** ${td['severity']}\n"
+                       "**Immediate Action:** ${td['action']}\n\n"
+                       "**Bio-Organic Remedy:** ${td['bio_remedy']}\n\n"
+                       "**Chemical Alternative:** ${td['chemical_remedy']}";
+            }
           }
         }
       }

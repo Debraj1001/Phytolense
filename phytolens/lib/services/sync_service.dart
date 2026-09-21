@@ -62,6 +62,9 @@ class SyncService {
     _isSyncing = true;
     
     try {
+      // ── Process pending deletions first ────────────────────────────────
+      await _syncPendingDeletions();
+
       final unsyncedScans = await _localDb.getUnsyncedScans();
       
       if (unsyncedScans.isNotEmpty) {
@@ -110,6 +113,29 @@ class SyncService {
       await syncOfflineChatUsage();
     } finally {
       _isSyncing = false;
+    }
+  }
+
+  /// Sync pending deletions to Supabase (queued while offline)
+  Future<void> _syncPendingDeletions() async {
+    try {
+      final pending = await _localDb.getPendingDeletions();
+      if (pending.isEmpty) return;
+
+      debugPrint('🗑️ Syncing ${pending.length} pending deletions...');
+      for (final row in pending) {
+        final scanId = row['scan_id'] as String;
+        final userId = row['user_id'] as String;
+        try {
+          await _supabase.deleteScan(scanId, userId: userId);
+          await _localDb.clearPendingDeletion(scanId);
+          debugPrint('✅ Synced deletion: $scanId');
+        } catch (e) {
+          debugPrint('❌ Failed to sync deletion $scanId: $e');
+        }
+      }
+    } catch (e) {
+      debugPrint('Pending deletions sync error: $e');
     }
   }
 

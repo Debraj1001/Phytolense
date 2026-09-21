@@ -29,7 +29,7 @@ class LocalDatabase {
 
     return openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE scans (
@@ -51,6 +51,15 @@ class LocalDatabase {
           )
         ''');
 
+        // Pending deletions queue — survives offline/restart, synced when online
+        await db.execute('''
+          CREATE TABLE pending_deletions (
+            scan_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            queued_at TEXT NOT NULL
+          )
+        ''');
+
         // Index for fast offline-first queries
         await db.execute(
           'CREATE INDEX idx_scans_user ON scans(user_id)',
@@ -61,6 +70,17 @@ class LocalDatabase {
         await db.execute(
           'CREATE INDEX idx_scans_date ON scans(scanned_at DESC)',
         );
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS pending_deletions (
+              scan_id TEXT PRIMARY KEY,
+              user_id TEXT NOT NULL,
+              queued_at TEXT NOT NULL
+            )
+          ''');
+        }
       },
     );
   }
@@ -273,5 +293,36 @@ class LocalDatabase {
       await db.close();
       _db = null;
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // PENDING DELETIONS QUEUE
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /// Queue a scan for deferred Supabase deletion (used when offline)
+  Future<void> queuePendingDeletion(String scanId, String userId) async {
+    final db = await database;
+    await db.insert(
+      'pending_deletions',
+      {
+        'scan_id': scanId,
+        'user_id': userId,
+        'queued_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    debugPrint('🗑️ Queued pending deletion for scan: $scanId');
+  }
+
+  /// Get all pending deletions that need to be synced to Supabase
+  Future<List<Map<String, dynamic>>> getPendingDeletions() async {
+    final db = await database;
+    return db.query('pending_deletions', orderBy: 'queued_at ASC');
+  }
+
+  /// Remove a scan from the pending deletions queue (after successful cloud delete)
+  Future<void> clearPendingDeletion(String scanId) async {
+    final db = await database;
+    await db.delete('pending_deletions', where: 'scan_id = ?', whereArgs: [scanId]);
   }
 }

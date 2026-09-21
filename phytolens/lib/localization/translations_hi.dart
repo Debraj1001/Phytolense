@@ -376,6 +376,7 @@ const Map<String, String> translationsHi = {
   'scan_detail_title': 'स्कैन विवरण',
   'deleted_successfully': 'स्कैन हटाया गया',
   'error_deleting': 'स्कैन हटाने में त्रुटि',
+  'deleted_offline': 'स्थानीय रूप से हटाया गया। ऑनलाइन होने पर सिंक होगा।',
 
 
   // Scan Detail

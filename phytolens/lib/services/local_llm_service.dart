@@ -1,18 +1,21 @@
 // lib/services/local_llm_service.dart
 //
-// On-device Offline AI service with 2-tier fallback:
+// On-device Offline AI service powered by llama_flutter_android (native C++ llama.cpp)
+// with ARM64 NEON and Vulkan GPU acceleration — ported from Rakshak architecture.
+//
+// 3-tier response fallback:
 //   Tier 0: Agronomy Knowledge Base (instant, <30KB, bundled in APK)
-//   Tier 1: Optional SLM — TinyLlama 1.1B Q4_K_M (~669MB, downloaded on demand)
+//   Tier 1: Native SLM — Qwen 2.5 0.5B/1.5B Instruct (downloaded on demand)
+//   Tier 2: Template reports (always available)
 //
 // The SLM is OPTIONAL — the app works fully offline without it.
-// The SLM enhances chat and provides freeform answers beyond the KB.
 
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:fllama/fllama.dart';
+import 'package:llama_flutter_android/llama_flutter_android.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -28,37 +31,70 @@ class LocalLLMService extends ChangeNotifier {
   LocalLLMService._internal();
 
   // ── Model Configuration ─────────────────────────────────────────────────
-  // Llama-3.2-1B-Instruct Q4_K_M — compact and highly capable for offline mobile inference (~814MB)
-  static const String _modelFileName = 'Llama-3.2-1B-Instruct-Q4_K_M.gguf';
-  static const String _modelUrl =
-      'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf';
-  static const int _modelSizeBytes = 814000000; // ~814MB approximate
+  // Qwen 2.5 0.5B Instruct Q4_K_M — ultra-fast, ideal for basic plant Q&A (~398MB)
+  static const String _defaultModelId = 'qwen-2.5-0.5b';
+  static const String _defaultModelFileName = 'qwen2.5-0.5b-instruct-q4_k_m.gguf';
+  static const String _defaultModelUrl =
+      'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf';
+  static const int _defaultModelSizeBytes = 398000000; // ~398MB
+
+  // Qwen 2.5 1.5B Instruct Q4_K_M — higher quality, multilingual reasoning (~1.1GB)
+  static const String _largeModelId = 'qwen-2.5-1.5b';
+  static const String _largeModelFileName = 'qwen2.5-1.5b-instruct-q4_k_m.gguf';
+  static const String _largeModelUrl =
+      'https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf';
+  static const int _largeModelSizeBytes = 1120000000; // ~1.1GB
+
   static const String _modelVersionKey = 'local_llm_version';
-  static const String _currentVersion = 'llama-3.2-1b-instruct-v1';
+  static const String _activeModelKey = 'local_llm_active_model';
   static const String _userContextKey = 'offline_user_context';
 
   // ── State ───────────────────────────────────────────────────────────────
+  LlamaController? _controller;
   bool _isModelLoaded = false;
   bool _isDownloading = false;
   bool _isGenerating = false;
   double _downloadProgress = 0.0;
   String? _modelPath;
-  double? _contextId;
-  http.Client? _httpClient; // Stored for cancellation
+  String _activeModelId = _defaultModelId;
+  GpuInfo? _cachedGpuInfo;
+  http.Client? _httpClient;
 
   bool get isModelLoaded => _isModelLoaded;
   bool get isDownloading => _isDownloading;
   bool get isGenerating => _isGenerating;
   double get downloadProgress => _downloadProgress;
   bool get isModelAvailable => _modelPath != null && File(_modelPath!).existsSync();
+  String get activeModelId => _activeModelId;
+  GpuInfo? get cachedGpuInfo => _cachedGpuInfo;
+
+  /// Available model options for the UI
+  static const List<Map<String, dynamic>> availableModels = [
+    {
+      'id': _defaultModelId,
+      'name': 'Qwen 2.5 0.5B Instruct',
+      'description': 'Ultra-fast plant Q&A. Runs on any phone.',
+      'size_mb': 398,
+      'fileName': _defaultModelFileName,
+      'url': _defaultModelUrl,
+      'sizeBytes': _defaultModelSizeBytes,
+    },
+    {
+      'id': _largeModelId,
+      'name': 'Qwen 2.5 1.5B Instruct',
+      'description': 'Higher quality, multilingual Hindi/Bengali support.',
+      'size_mb': 1120,
+      'fileName': _largeModelFileName,
+      'url': _largeModelUrl,
+      'sizeBytes': _largeModelSizeBytes,
+    },
+  ];
 
   // ═══════════════════════════════════════════════════════════════════════
   // USER CONTEXT INJECTION
-  // Feed user data to the offline model so it knows who it's talking to.
   // ═══════════════════════════════════════════════════════════════════════
 
   /// Cache user profile + recent scan history for offline LLM context.
-  /// Call this after model download and whenever the app starts online.
   Future<void> feedUserContext(AppUser user, List<ScanResult> recentScans) async {
     final scanSummaries = recentScans.take(20).map((s) {
       return '- ${s.plantName}: ${s.diseaseName} (Health: ${s.healthScore}/100, ${s.scannedAt.toString().substring(0, 10)})';
@@ -87,7 +123,6 @@ class LocalLLMService extends ChangeNotifier {
   Future<String> _buildSystemPrompt() async {
     String userBlock = 'User Tier: Free';
 
-    // Try to load cached offline context first
     final prefs = await SharedPreferences.getInstance();
     final cachedJson = prefs.getString(_userContextKey);
 
@@ -113,7 +148,6 @@ Recent Scan History:
 $recentScans''';
       } catch (_) {}
     } else {
-      // Fallback: try live Supabase fetch (works when online)
       final uid = Supabase.instance.client.auth.currentUser?.id;
       if (uid != null) {
         try {
@@ -137,7 +171,7 @@ CRITICAL INSTRUCTIONS:
 3. NEVER output code, programming syntax, HTML tags, or technical markup.
 4. NEVER wrap your response in code fences or backticks.
 5. Use simple, conversational language. Write like a friendly expert, not a computer.
-6. Use bullet points (•) for lists, not markdown syntax.
+6. Use Markdown formatting (bolding **, bullet points -, numbered lists) to make your response highly organized and easy to read. Highlight key terms.
 7. ${LanguageService().aiLanguageDirective}
 
 USER DATABASE & APP CONTEXT:
@@ -148,7 +182,6 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
 
   // ═══════════════════════════════════════════════════════════════════════
   // RESPONSE CLEANING
-  // Strips code leakage, thinking tokens, and formatting artifacts.
   // ═══════════════════════════════════════════════════════════════════════
 
   /// Clean raw LLM output to remove code leakage and formatting artifacts.
@@ -157,20 +190,16 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
 
     // Strip <think>...</think> blocks (reasoning model leakage)
     text = text.replaceAll(RegExp(r'<think>[\s\S]*?</think>', caseSensitive: false), '');
-
-    // Strip orphaned <think> or </think> tags
     text = text.replaceAll(RegExp(r'</?think>', caseSensitive: false), '');
 
     // Strip stray HTML-like tags (but preserve markdown bold/italic)
     text = text.replaceAll(RegExp(r'<(?!/?(?:b|i|em|strong)>)[^>]+>', caseSensitive: false), '');
 
     // Strip code fences wrapping non-code text
-    // Only remove if the content doesn't look like actual code
     text = text.replaceAllMapped(
       RegExp(r'```(?:\w*)\n?([\s\S]*?)```'),
       (match) {
         final content = match.group(1) ?? '';
-        // If it contains programming keywords, keep the fence
         final looksLikeCode = RegExp(r'(?:def |class |import |function |var |const |let |return |if \(|for \()').hasMatch(content);
         return looksLikeCode ? match.group(0)! : content;
       },
@@ -181,7 +210,6 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
       RegExp(r'`([^`\n]{1,50})`'),
       (match) {
         final inner = match.group(1) ?? '';
-        // Keep backticks if it looks like a technical term
         final isTechnical = RegExp(r'[_\.\(\)\[\]{}=<>]').hasMatch(inner);
         return isTechnical ? match.group(0)! : inner;
       },
@@ -192,6 +220,21 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
     text = text.trim();
 
     return text;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // GPU DETECTION
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /// Detect GPU capabilities via Vulkan for hardware acceleration
+  Future<GpuInfo?> detectGpu() async {
+    try {
+      _controller ??= LlamaController();
+      _cachedGpuInfo = await _controller!.detectGpu();
+      return _cachedGpuInfo;
+    } catch (_) {
+      return null;
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -208,29 +251,34 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
     return modelDir;
   }
 
-  /// Returns the full path to the model file (whether it exists or not)
-  Future<String> _getModelFilePath() async {
+  /// Get model config by ID
+  Map<String, dynamic> _getModelConfig(String modelId) {
+    return availableModels.firstWhere(
+      (m) => m['id'] == modelId,
+      orElse: () => availableModels.first,
+    );
+  }
+
+  /// Returns the full path to a model file
+  Future<String> _getModelFilePath(String modelId) async {
     final dir = await _getModelDir();
-    return '${dir.path}/$_modelFileName';
+    final config = _getModelConfig(modelId);
+    return '${dir.path}/${config['fileName']}';
   }
 
-  /// Returns the path to the temporary download file
-  Future<String> _getTempFilePath() async {
-    final filePath = await _getModelFilePath();
-    return '$filePath.download';
-  }
-
-  /// Check if the model is already downloaded and valid
-  Future<bool> isModelDownloaded() async {
+  /// Check if a specific model is downloaded and valid
+  Future<bool> isModelDownloaded({String? modelId}) async {
+    final id = modelId ?? _activeModelId;
     try {
-      final path = await _getModelFilePath();
+      final path = await _getModelFilePath(id);
       final file = File(path);
       if (await file.exists()) {
         final size = await file.length();
-        // Model should be at least 400MB to be valid
-        if (size > 400000000) {
-           _modelPath = path;
-           return true;
+        final config = _getModelConfig(id);
+        // Model should be at least 90% of expected size to be valid
+        if (size >= (config['sizeBytes'] as int) * 0.90) {
+          _modelPath = path;
+          return true;
         }
         // Corrupted / incomplete download — delete it
         await file.delete();
@@ -243,11 +291,11 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
   }
 
   /// Check if a partial download exists and return its size in bytes.
-  /// Returns 0 if no partial file exists.
-  Future<int> getPartialDownloadSizeBytes() async {
+  Future<int> getPartialDownloadSizeBytes({String? modelId}) async {
+    final id = modelId ?? _activeModelId;
     try {
-      final tempPath = await _getTempFilePath();
-      final tempFile = File(tempPath);
+      final filePath = await _getModelFilePath(id);
+      final tempFile = File('$filePath.download');
       if (await tempFile.exists()) {
         return await tempFile.length();
       }
@@ -255,20 +303,23 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
     return 0;
   }
 
-  /// Download the model with progress callback.
+  /// Download a model with progress callback.
   /// Supports resumption from partial downloads automatically.
-  /// [onProgress] receives a value between 0.0 and 1.0
   Future<bool> downloadModel({
+    String? modelId,
     required Function(double progress) onProgress,
     Function(String error)? onError,
   }) async {
     if (_isDownloading) return false;
+    final id = modelId ?? _activeModelId;
+    final config = _getModelConfig(id);
+
     _isDownloading = true;
     _downloadProgress = 0.0;
     notifyListeners();
 
     try {
-      final filePath = await _getModelFilePath();
+      final filePath = await _getModelFilePath(id);
       final tempPath = '$filePath.download';
       final tempFile = File(tempPath);
 
@@ -280,7 +331,7 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
       }
 
       _httpClient = http.Client();
-      final request = http.Request('GET', Uri.parse(_modelUrl));
+      final request = http.Request('GET', Uri.parse(config['url'] as String));
       if (downloadedBytes > 0) {
         request.headers['Range'] = 'bytes=$downloadedBytes-';
       }
@@ -289,14 +340,13 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
 
       // Check if server supports range requests
       if (downloadedBytes > 0 && response.statusCode == 200) {
-        // Server didn't honor Range header, restart from scratch
         downloadedBytes = 0;
         if (await tempFile.exists()) await tempFile.delete();
       }
 
-      // Get total size
+      final expectedSize = config['sizeBytes'] as int;
       final totalBytes = downloadedBytes +
-          (response.contentLength ?? (_modelSizeBytes - downloadedBytes));
+          (response.contentLength ?? (expectedSize - downloadedBytes));
 
       final sink = tempFile.openWrite(
         mode: downloadedBytes > 0 && response.statusCode == 206
@@ -306,7 +356,6 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
 
       await for (final chunk in response.stream) {
         if (!_isDownloading) {
-          // Download was cancelled
           await sink.flush();
           await sink.close();
           notifyListeners();
@@ -326,7 +375,7 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
 
       // Validate downloaded file
       final downloadedSize = await tempFile.length();
-      if (downloadedSize < 400000000) {
+      if (downloadedSize < expectedSize * 0.90) {
         await tempFile.delete();
         onError?.call('Download incomplete. Please try again.');
         _isDownloading = false;
@@ -337,10 +386,12 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
       // Move temp file to final location
       await tempFile.rename(filePath);
       _modelPath = filePath;
+      _activeModelId = id;
 
       // Save version tag
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_modelVersionKey, _currentVersion);
+      await prefs.setString(_modelVersionKey, 'qwen-v1');
+      await prefs.setString(_activeModelKey, id);
 
       _isDownloading = false;
       _downloadProgress = 1.0;
@@ -357,7 +408,7 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
     }
   }
 
-  /// Cancel an in-progress download. The partial file is preserved for resume.
+  /// Cancel an in-progress download
   void cancelDownload() {
     if (!_isDownloading) return;
     _isDownloading = false;
@@ -367,11 +418,12 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
     notifyListeners();
   }
 
-  /// Delete the partial download file to start fresh.
-  Future<void> cleanPartialDownload() async {
+  /// Delete the partial download file to start fresh
+  Future<void> cleanPartialDownload({String? modelId}) async {
+    final id = modelId ?? _activeModelId;
     try {
-      final tempPath = await _getTempFilePath();
-      final tempFile = File(tempPath);
+      final filePath = await _getModelFilePath(id);
+      final tempFile = File('$filePath.download');
       if (await tempFile.exists()) {
         await tempFile.delete();
         debugPrint('🧹 Cleaned partial download file.');
@@ -382,23 +434,28 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
     notifyListeners();
   }
 
-  /// Get the model file size for display (in MB)
-  String get modelSizeLabel => '${(_modelSizeBytes / (1024 * 1024)).round()} MB';
+  /// Get the model file size label for display
+  String get modelSizeLabel {
+    final config = _getModelConfig(_activeModelId);
+    return '${((config['sizeBytes'] as int) / (1024 * 1024)).round()} MB';
+  }
 
-  /// Delete the downloaded model to free storage
-  Future<void> deleteModel() async {
-    _isModelLoaded = false;
-    _modelPath = null;
+  /// Delete a downloaded model
+  Future<void> deleteModel({String? modelId}) async {
+    final id = modelId ?? _activeModelId;
+    if (_isModelLoaded && _activeModelId == id) {
+      await unloadModel();
+    }
     try {
-      final path = await _getModelFilePath();
+      final path = await _getModelFilePath(id);
       final file = File(path);
       if (await file.exists()) {
         await file.delete();
       }
-      // Also clean any partial download
-      await cleanPartialDownload();
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_modelVersionKey);
+      await cleanPartialDownload(modelId: id);
+      if (id == _activeModelId) {
+        _modelPath = null;
+      }
     } catch (e) {
       debugPrint('Model delete error: $e');
     }
@@ -406,35 +463,52 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // MODEL LOADING
+  // MODEL LOADING (Native C++ llama.cpp via LlamaController)
   // ═══════════════════════════════════════════════════════════════════════
 
-  /// Load the model into memory for inference.
-  /// This should be called once at app startup after confirming download.
-  Future<bool> loadModel() async {
-    if (_isModelLoaded) return true;
+  /// Load the model into native C++ llama.cpp memory.
+  Future<bool> loadModel({String? modelId}) async {
+    final id = modelId ?? _activeModelId;
+    if (_isModelLoaded && _activeModelId == id) return true;
 
     try {
-      final downloaded = await isModelDownloaded();
+      final downloaded = await isModelDownloaded(modelId: id);
       if (!downloaded) return false;
 
-      final context = await Fllama.instance()?.initContext(
-        _modelPath!,
-        nCtx: 2048,
-        nThreads: Platform.numberOfProcessors ~/ 2,
-      );
-      
-      _contextId = double.tryParse(context?["contextId"]?.toString() ?? "");
-      
-      if (_contextId != null) {
-        _isModelLoaded = true;
-        debugPrint('✅ Local LLM loaded: $_modelPath, Context ID: $_contextId');
-        notifyListeners();
-        return true;
+      // Unload previous model if switching
+      if (_isModelLoaded) {
+        await unloadModel();
       }
-      
-      debugPrint('Model load failed: Invalid context ID');
-      return false;
+
+      _controller ??= LlamaController();
+
+      // Auto-detect GPU layers for hardware acceleration
+      int? gpuLayers;
+      try {
+        final gpu = await detectGpu();
+        if (gpu != null && gpu.vulkanSupported && gpu.recommendedGpuLayers > 0) {
+          gpuLayers = gpu.recommendedGpuLayers;
+          debugPrint('🖥️ Vulkan GPU detected, using $gpuLayers layers');
+        }
+      } catch (_) {}
+
+      await _controller!.loadModel(
+        modelPath: _modelPath!,
+        threads: Platform.numberOfProcessors ~/ 2,
+        contextSize: 2048,
+        gpuLayers: gpuLayers,
+      );
+
+      _isModelLoaded = true;
+      _activeModelId = id;
+      debugPrint('✅ Native LLM loaded: $_modelPath (Vulkan: ${gpuLayers != null})');
+
+      // Persist active model preference
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_activeModelKey, id);
+
+      notifyListeners();
+      return true;
     } catch (e) {
       debugPrint('Model load error: $e');
       _isModelLoaded = false;
@@ -442,12 +516,13 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
     }
   }
 
-  /// Unload the model from memory to free resources
-  void unloadModel() {
-    if (_contextId != null) {
-      Fllama.instance()?.releaseContext(_contextId!);
-      _contextId = null;
-    }
+  /// Unload the model from native memory
+  Future<void> unloadModel() async {
+    if (!_isModelLoaded || _controller == null) return;
+    try {
+      await _controller?.dispose();
+    } catch (_) {}
+    _controller = null;
     _isModelLoaded = false;
     notifyListeners();
   }
@@ -460,7 +535,6 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
   final AgronomyKBService _agronomyKB = AgronomyKBService();
 
   /// Generate an offline disease report based on the user's subscription tier.
-  /// Uses Agronomy KB first (instant), SLM second (if loaded), template last.
   Future<String> getTieredAdvice({
     required String tier,
     required String plantName,
@@ -470,7 +544,7 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
     String? tfliteLabel,
   }) async {
     final String reportType;
-    switch (tier) {
+    switch (tier.toLowerCase()) {
       case 'farm':
         reportType = 'full';
         break;
@@ -509,8 +583,6 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
       tfliteLabel: tfliteLabel,
     );
 
-    // If Agronomy KB has a verified entry, use it directly — it's faster
-    // and more accurate than SLM for known diseases.
     final hasKBEntry = tfliteLabel != null
         ? _agronomyKB.lookup(tfliteLabel) != null
         : _agronomyKB.lookupByNames(plantName, diseaseName) != null;
@@ -520,21 +592,22 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
       return kbReport;
     }
 
-    // ── TIER 1: SLM (optional, if model is downloaded and loaded) ────────
+    // ── TIER 1: Native SLM (if loaded) ───────────────────────────────────
     if (_isModelLoaded) {
-      debugPrint('🤖 SLM: Generating freeform report for unknown disease');
+      debugPrint('🤖 Native SLM: Generating freeform report for unknown disease');
       final severity = severityPercent != null ? '\nSeverity: $severityPercent%' : '';
       final String prompt;
 
+      final lang = LanguageService().language.nativeName;
       switch (reportType) {
         case 'full':
-          prompt = 'Plant: $plantName\nDisease: $diseaseName\nHealth Score: $healthScore/100$severity\n\nProvide a COMPREHENSIVE crop health report with disease identification, treatment steps, organic remedies, chemical options, prevention calendar, and yield impact. Use simple language.';
+          prompt = 'Plant: $plantName\nDisease: $diseaseName\nHealth Score: $healthScore/100$severity\n\nProvide a COMPREHENSIVE crop health report with disease identification, treatment steps, organic remedies, chemical options, prevention calendar, and yield impact. Use clear markdown tables and bullet points. (You are generating a FARM tier report, be extremely comprehensive and professional).\n\nIMPORTANT: Respond EXCLUSIVELY in $lang.';
           break;
         case 'detailed':
-          prompt = 'Plant: $plantName\nDisease: $diseaseName\nHealth Score: $healthScore/100$severity\n\nExplain this disease, why it happens, treatment steps, prevention, and organic remedies. Be concise and practical.';
+          prompt = 'Plant: $plantName\nDisease: $diseaseName\nHealth Score: $healthScore/100$severity\n\nExplain this disease, why it happens, treatment steps, prevention, and organic remedies. Use clear markdown headers and bullet points. (You are generating a PRO tier report, be detailed and structured).\n\nIMPORTANT: Respond EXCLUSIVELY in $lang.';
           break;
         default:
-          prompt = 'Plant: $plantName\nDisease: $diseaseName\nHealth Score: $healthScore/100$severity\n\nGive a 2-3 sentence summary and the most important action to take now.';
+          prompt = 'Plant: $plantName\nDisease: $diseaseName\nHealth Score: $healthScore/100$severity\n\nGive a 2-3 sentence summary and the most important action to take now. (You are generating a FREE tier report, keep it brief and simple).\n\nIMPORTANT: Respond EXCLUSIVELY in $lang.';
       }
 
       try {
@@ -549,9 +622,9 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
     return kbReport;
   }
 
-  /// Run actual LLM inference
+  /// Run actual LLM inference via native llama.cpp
   Future<String> _runInference(String userPrompt) async {
-    if (!_isModelLoaded) {
+    if (!_isModelLoaded || _controller == null) {
       return 'AI model not loaded. Please download the AI model from Settings.';
     }
 
@@ -559,20 +632,24 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
 
     try {
       final sysPrompt = await _buildSystemPrompt();
-      final prompt = '<start_of_turn>system\\n$sysPrompt<end_of_turn>\\n'
-                     '<start_of_turn>user\\n$userPrompt<end_of_turn>\\n'
-                     '<start_of_turn>model\\n';
-                     
-      final result = await Fllama.instance()?.completion(
-        _contextId!,
-        prompt: prompt,
+
+      final buffer = StringBuffer();
+      final stream = _controller!.generateChat(
+        messages: [
+          ChatMessage(role: 'system', content: sysPrompt),
+          ChatMessage(role: 'user', content: userPrompt),
+        ],
+        maxTokens: 512,
         temperature: 0.7,
         topP: 0.9,
-        stop: ['<end_of_turn>'],
       );
-      
-      final text = result?['text'] as String?;
-      if (text != null && text.isNotEmpty) {
+
+      await for (final token in stream) {
+        buffer.write(token);
+      }
+
+      final text = buffer.toString().trim();
+      if (text.isNotEmpty) {
         return text;
       }
 
@@ -583,7 +660,7 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
         reportType: 'basic',
       );
     } catch (e) {
-      debugPrint('Local LLM inference error: $e');
+      debugPrint('Native LLM inference error: $e');
       return 'Could not generate report. The AI model may need more memory.';
     } finally {
       _isGenerating = false;
@@ -591,7 +668,7 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // STREAMING CHAT (Offline)
+  // STREAMING CHAT (Offline) — Native C++ token streaming
   // ═══════════════════════════════════════════════════════════════════════
 
   /// Stream chat responses token-by-token for real-time UI
@@ -599,7 +676,7 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
     String userMessage,
     List<Map<String, String>> history,
   ) async* {
-    if (!_isModelLoaded) {
+    if (!_isModelLoaded || _controller == null) {
       yield '📱 The AI model is not ready yet. ';
       yield 'Please download it from the Settings page. ';
       yield 'Once downloaded, you can chat offline anytime!';
@@ -610,56 +687,41 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
 
     try {
       final sysPrompt = await _buildSystemPrompt();
-      // Build conversation context
-      final StringBuffer conversationBuf = StringBuffer();
-      conversationBuf.writeln('<start_of_turn>system');
-      conversationBuf.writeln(sysPrompt);
-      conversationBuf.writeln('<end_of_turn>');
 
+      // Build messages list for generateChat
+      final messages = <ChatMessage>[
+        ChatMessage(role: 'system', content: sysPrompt),
+      ];
+
+      // Add conversation history
       for (final msg in history) {
-        final role = msg['role'] == 'assistant' ? 'model' : 'user';
-        conversationBuf.writeln('<start_of_turn>$role');
-        conversationBuf.writeln(msg['content'] ?? '');
-        conversationBuf.writeln('<end_of_turn>');
+        final role = msg['role'] ?? 'user';
+        final content = msg['content'] ?? '';
+        if (content.isNotEmpty) {
+          messages.add(ChatMessage(
+            role: role == 'assistant' ? 'assistant' : 'user',
+            content: content,
+          ));
+        }
       }
 
-      conversationBuf.writeln('<start_of_turn>user');
-      conversationBuf.writeln(userMessage);
-      conversationBuf.writeln('<end_of_turn>');
-      conversationBuf.writeln('<start_of_turn>model');
+      // Add current user message
+      final lang = LanguageService().language.nativeName;
+      messages.add(ChatMessage(role: 'user', content: '$userMessage\n\n[Respond EXCLUSIVELY in $lang]'));
 
-      final controller = StreamController<String>();
-      StreamSubscription? fllamaSub;
-
-      fllamaSub = Fllama.instance()?.onTokenStream?.listen((data) {
-        if (data['function'] == 'completion') {
-          final token = data['result']['token'];
-          if (token == '<end_of_turn>' || token == null) {
-            fllamaSub?.cancel();
-            controller.close();
-          } else {
-            controller.add(token);
-          }
-        }
-      });
-
-      Fllama.instance()?.completion(
-        _contextId!,
-        prompt: conversationBuf.toString(),
+      // Stream tokens directly from native C++ llama.cpp
+      final stream = _controller!.generateChat(
+        messages: messages,
+        maxTokens: 512,
         temperature: 0.7,
         topP: 0.9,
-        emitRealtimeCompletion: true,
-        stop: ['<end_of_turn>'],
-      ).then((_) {
-        if (!controller.isClosed) {
-          controller.close();
-          fllamaSub?.cancel();
-        }
-      });
-      
-      yield* controller.stream;
+      );
+
+      await for (final token in stream) {
+        yield token;
+      }
     } catch (e) {
-      debugPrint('Local LLM stream error: $e');
+      debugPrint('Native LLM stream error: $e');
       yield '⚠️ Sorry, the on-device AI ran into an issue. ';
       yield 'This may happen if your phone is low on memory. ';
       yield 'Try closing other apps and trying again.';
@@ -682,7 +744,6 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
 
   // ═══════════════════════════════════════════════════════════════════════
   // TEMPLATE FALLBACK REPORTS
-  // Used when LLM model is not yet downloaded — still provides value.
   // ═══════════════════════════════════════════════════════════════════════
 
   String _templateReport({
@@ -795,9 +856,10 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
   // ═══════════════════════════════════════════════════════════════════════
 
   /// Get the size of the downloaded model in MB
-  Future<double> getModelSizeMB() async {
+  Future<double> getModelSizeMB({String? modelId}) async {
+    final id = modelId ?? _activeModelId;
     try {
-      final path = await _getModelFilePath();
+      final path = await _getModelFilePath(id);
       final file = File(path);
       if (await file.exists()) {
         return (await file.length()) / (1024 * 1024);

@@ -376,6 +376,7 @@ const Map<String, String> translationsEn = {
   'scan_detail_title': 'Scan Detail',
   'deleted_successfully': 'Scan deleted',
   'error_deleting': 'Error deleting scan',
+  'deleted_offline': 'Deleted locally. Will sync when online.',
 
 
   // Scan Detail

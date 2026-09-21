@@ -445,39 +445,50 @@ class _ScanHistoryScreenState extends ConsumerState<ScanHistoryScreen> {
   }
 
   Future<void> _delete(ScanResult scan) async {
-    // Remove locally first for optimistic UI update
+    // 1. Remove from UI immediately (optimistic)
     setState(() {
       _scans.removeWhere((s) => s.id == scan.id);
       _applyFilter();
     });
     
+    // 2. Always delete from local SQLite — this is the source of truth on-device
+    try {
+      await _localDb.deleteScan(scan.id);
+    } catch (e) {
+      debugPrint('Local delete error: $e');
+    }
+
+    // 3. Try Supabase delete; on failure, queue for later sync
     try {
       final uid = Supabase.instance.client.auth.currentUser?.id;
-      await _localDb.deleteScan(scan.id);
       await _supabase.deleteScan(scan.id, userId: uid ?? scan.userId);
     } catch (e) {
+      debugPrint('Supabase delete deferred (offline): $e');
+      // Queue for background sync — do NOT reload/revert the UI
+      final uid = Supabase.instance.client.auth.currentUser?.id ?? scan.userId;
+      await _localDb.queuePendingDeletion(scan.id, uid);
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
               children: [
-                const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
+                const Icon(Icons.cloud_off_rounded, color: Colors.white, size: 20),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    ref.tr('error_deleting'),
+                    ref.tr('deleted_offline'),
                     style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
                   ),
                 ),
               ],
             ),
-            backgroundColor: AppColors.error,
+            backgroundColor: AppColors.warning,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             margin: const EdgeInsets.only(bottom: 90, left: 16, right: 16),
           ),
         );
-        _load(); // Reload the data to restore the deleted item
       }
     }
   }

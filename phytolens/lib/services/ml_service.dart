@@ -40,8 +40,12 @@ class MLService {
   // ─── Inference ────────────────────────────────────────────────────────────
 
   Future<MLResult> classifyImage(File imageFile) async {
+    // Auto-initialize if not yet loaded (safety net)
     if (!isLoaded) {
-      return _mockInference(imageFile.path);
+      await initialize();
+      if (!isLoaded) {
+        return _mockInference(imageFile.path);
+      }
     }
 
     try {
@@ -49,28 +53,33 @@ class MLService {
       final image = img.decodeImage(imageBytes);
       if (image == null) throw Exception('Invalid image');
 
-      // The standard PlantVillage model requires 256x256 input
-      const int inputSize = 256;
+      // The PlantVillage MobileNetV2 model requires 224x224 input
+      // (verified via flatbuffer tensor inspection: input shape [1, 224, 224, 3])
+      const int inputSize = 224;
       final resized = img.copyResize(image, width: inputSize, height: inputSize);
 
       // ── Lightweight Non-Plant Heuristic ──
       // Check if image contains at least some plant-like colors (green, yellow, brown)
+      // Relaxed threshold: diseased leaves can be heavily brown/spotted/dry.
       int plantPixels = 0;
-      for (int y = 0; y < inputSize; y += 8) {
-        for (int x = 0; x < inputSize; x += 8) {
+      final sampleStep = 8;
+      for (int y = 0; y < inputSize; y += sampleStep) {
+        for (int x = 0; x < inputSize; x += sampleStep) {
           final p = resized.getPixel(x, y);
-          // Greenish, yellowish, or brownish tones
-          if ((p.g > p.b && p.r > p.b) || (p.g > p.r * 0.8 && p.g > 30)) {
+          // Greenish, yellowish, brownish, or warm organic tones
+          if ((p.g > p.b && p.r > p.b) ||
+              (p.g > p.r * 0.8 && p.g > 30) ||
+              (p.r > 60 && p.g > 40 && p.b < p.r * 0.8)) {
             plantPixels++;
           }
         }
       }
-      // Sampled 32x32 = 1024 pixels. If less than 3% are plant-like, reject.
-      if (plantPixels < 30) {
+      // ~784 sampled pixels on 224/8 grid. Reject only if <2% are organic tones.
+      if (plantPixels < 15) {
         throw Exception('NOT_A_PLANT');
       }
 
-      // Convert image to a 3D float array [1, 256, 256, 3] and normalize 0..1
+      // Convert image to a 4D float array [1, 224, 224, 3] and normalize 0..1
       var input = List.generate(
         1,
         (i) => List.generate(
