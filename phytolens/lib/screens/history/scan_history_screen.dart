@@ -54,13 +54,19 @@ class _ScanHistoryScreenState extends ConsumerState<ScanHistoryScreen> {
   }
 
   void _load() async {
-    final uid = Supabase.instance.client.auth.currentUser?.id ?? '';
+    final authUser = Supabase.instance.client.auth.currentUser;
+    var uid = authUser?.id ?? '';
+    if (uid.isEmpty) {
+      final lastUser = await _localDb.getLastLoggedInUser();
+      uid = lastUser?.uid ?? '';
+    }
+
     _sub?.cancel();
 
     // 1. Immediately load offline scans from SQLite local database
     try {
       final localScans = await _localDb.getUserScans(uid);
-      if (mounted && localScans.isNotEmpty) {
+      if (mounted) {
         setState(() {
           _scans = localScans;
           _applyFilter();
@@ -69,6 +75,7 @@ class _ScanHistoryScreenState extends ConsumerState<ScanHistoryScreen> {
       }
     } catch (e) {
       debugPrint('Local DB history load error: $e');
+      if (mounted) setState(() => _loading = false);
     }
 
     if (uid.isEmpty) {
@@ -83,7 +90,7 @@ class _ScanHistoryScreenState extends ConsumerState<ScanHistoryScreen> {
         final combined = await _localDb.getUserScans(uid);
         if (mounted) {
           setState(() {
-            _scans = combined.isNotEmpty ? combined : cloudScans;
+            _scans = combined;
             _applyFilter();
             _loading = false;
           });
@@ -451,10 +458,12 @@ class _ScanHistoryScreenState extends ConsumerState<ScanHistoryScreen> {
       _applyFilter();
     });
     
-    // 2. Always delete from local SQLite — this is the source of truth on-device
+    final uid = Supabase.instance.client.auth.currentUser?.id ?? scan.userId;
+
+    // 2. Queue in pending_deletions FIRST, then delete from local SQLite table
     try {
+      await _localDb.queuePendingDeletion(scan.id, uid);
       await _localDb.deleteScan(scan.id);
-      await _localDb.clearPendingDeletion(scan.id);
     } catch (e) {
       debugPrint('Local delete error: $e');
     }
@@ -462,8 +471,9 @@ class _ScanHistoryScreenState extends ConsumerState<ScanHistoryScreen> {
     final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
     final isCloudScan = uuidRegex.hasMatch(scan.id);
 
-    // If it's a local/offline scan that never reached the cloud, local deletion is completely finished!
+    // If it's a local/offline scan that never reached the cloud, clear pending deletion and finish!
     if (!isCloudScan) {
+      await _localDb.clearPendingDeletion(scan.id);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -490,10 +500,9 @@ class _ScanHistoryScreenState extends ConsumerState<ScanHistoryScreen> {
       return;
     }
 
-    // 3. Try Supabase delete; on failure, queue for later sync
+    // 3. Try Supabase delete; on confirmed cloud deletion, remove from pending_deletions
     try {
-      final uid = Supabase.instance.client.auth.currentUser?.id;
-      await _supabase.deleteScan(scan.id, userId: uid ?? scan.userId);
+      await _supabase.deleteScan(scan.id, userId: uid).timeout(const Duration(seconds: 4));
       await _localDb.clearPendingDeletion(scan.id);
 
       if (mounted) {
@@ -521,10 +530,8 @@ class _ScanHistoryScreenState extends ConsumerState<ScanHistoryScreen> {
       }
     } catch (e) {
       debugPrint('Supabase delete deferred (offline): $e');
-      // Queue for background sync — do NOT reload/revert the UI
-      final uid = Supabase.instance.client.auth.currentUser?.id ?? scan.userId;
-      await _localDb.queuePendingDeletion(scan.id, uid);
-
+      // Remains in pending_deletions! When connection returns, SyncService deletes it from Supabase.
+      // Meanwhile, batchUpsertScans and getUserScans ignore it, so it will never reappear.
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

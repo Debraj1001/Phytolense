@@ -83,17 +83,33 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   void _load() async {
     final currentUser = Supabase.instance.client.auth.currentUser;
-    final uid = currentUser?.id ?? '';
+    var uid = currentUser?.id ?? '';
 
     _userSub?.cancel();
     _scansSub?.cancel();
 
-    // 1. Immediately load offline scans & stats from SQLite local database
+    // 1. If currentUser is null (offline start), try retrieving cached user from SQLite
+    if (uid.isEmpty) {
+      try {
+        final lastUser = await _localDb.getLastLoggedInUser();
+        if (lastUser != null) {
+          uid = lastUser.uid;
+          if (mounted) {
+            setState(() {
+              _user = lastUser;
+              _loading = false;
+            });
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 2. Immediately load offline scans & stats from SQLite local database
     if (uid.isNotEmpty) {
       try {
         final localScans = await _localDb.getRecentScans(uid, limit: 5);
         final localStats = await _localDb.getUserStats(uid);
-        if (mounted && localScans.isNotEmpty) {
+        if (mounted) {
           setState(() {
             _recentScans = localScans;
             _stats = {
@@ -106,34 +122,41 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         }
       } catch (e) {
         debugPrint('Dashboard local DB error: $e');
+        if (mounted) setState(() => _loading = false);
       }
+    } else {
+      if (mounted) setState(() => _loading = false);
     }
 
-    if (currentUser == null) {
+    if (currentUser == null && uid.isEmpty) {
       if (mounted) setState(() => _loading = false);
       return;
     }
 
-    try {
-      final initialUser = await _auth.getUser(uid);
-      if (mounted) {
-        setState(() {
-          _user = initialUser;
-          _loading = false;
-        });
+    if (uid.isNotEmpty) {
+      try {
+        final initialUser = await _auth.getUser(uid).timeout(
+          const Duration(seconds: 2),
+        );
+        if (mounted) {
+          setState(() {
+            _user = initialUser;
+            _loading = false;
+          });
+        }
+      } catch (_) {
+        if (mounted) setState(() => _loading = false);
       }
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
-    }
 
-    _userSub = _auth.userStream(uid).listen((user) {
-      if (mounted && user != null) {
-        setState(() {
-          _user = user;
-          _loading = false;
-        });
-      }
-    });
+      _userSub = _auth.userStream(uid).listen((user) {
+        if (mounted && user != null) {
+          setState(() {
+            _user = user;
+            _loading = false;
+          });
+        }
+      }, onError: (_) {});
+    }
 
     _scansSub = _supabase.streamUserScans(uid).listen((scans) async {
       if (mounted) {
@@ -157,7 +180,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
         if (mounted) {
           setState(() {
-            _recentScans = allRecent.isNotEmpty ? allRecent : scans.take(5).toList();
+            _recentScans = allRecent;
             _stats = stats;
             _loading = false;
           });
@@ -169,8 +192,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     });
 
     try {
-      final spray = await _weather.getSprayWindow();
-      if (mounted) {
+      final spray = await _weather.getSprayWindow().timeout(const Duration(seconds: 2), onTimeout: () => null);
+      if (mounted && spray != null) {
         setState(() => _sprayWindow = spray);
       }
     } catch (_) {}
@@ -180,7 +203,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           .from('outbreak_alerts')
           .select()
           .order('reported_at', ascending: false)
-          .limit(3);
+          .limit(3)
+          .timeout(const Duration(seconds: 2));
       if (mounted) {
         if (response.isNotEmpty) {
           final count = response.length;

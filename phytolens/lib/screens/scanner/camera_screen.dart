@@ -157,97 +157,107 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
       final isAiEngineEnabled = ref.read(aiEngineProvider);
       final String userTier = limit.tier;
 
-      if (mounted) setState(() => _scanStage = ref.tr('identifying_plant'));
+      // ── ONLINE BRANCH: Only execute if confirmed online and high confidence not already reached ──
+      if (isOnline && isAiEngineEnabled) {
+        if (mounted) setState(() => _scanStage = ref.tr('identifying_plant'));
 
-      // ── TIER 2: Pl@ntNet API (online botanical identification) ─────────
-      if (isOnline && isAiEngineEnabled && (confidence < 0.70 || plantName == 'Unknown Plant' || diseaseName == 'Unrecognized')) {
-        try {
-          final plantNetResult = await _plantNet.identifyPlant(file);
+        // ── TIER 2: Pl@ntNet API (online botanical identification) ─────────
+        if (confidence < 0.70 || plantName == 'Unknown Plant' || diseaseName == 'Unrecognized') {
+          try {
+            final plantNetResult = await _plantNet.identifyPlant(file);
 
-          if (plantNetResult != null && plantNetResult.confidence >= 0.15) {
-            plantName = plantNetResult.commonName;
-            confidence = plantNetResult.confidence;
-            identifiedByPlantNet = true;
-            diseaseName = 'Identified Species';
-            healthScore = 85;
+            if (plantNetResult != null && plantNetResult.confidence >= 0.15) {
+              plantName = plantNetResult.commonName;
+              confidence = plantNetResult.confidence;
+              identifiedByPlantNet = true;
+              diseaseName = 'Identified Species';
+              healthScore = 85;
 
-            // If TFLite detected a disease with moderate confidence, keep it
-            if (mlResult.confidence >= 0.40 && !mlResult.isUnknown && !mlResult.isHealthy) {
-              diseaseName = mlResult.diseaseName;
-              healthScore = mlResult.healthScore;
+              // If TFLite detected a disease with moderate confidence, keep it
+              if (mlResult.confidence >= 0.40 && !mlResult.isUnknown && !mlResult.isHealthy) {
+                diseaseName = mlResult.diseaseName;
+                healthScore = mlResult.healthScore;
+              }
             }
+          } catch (e) {
+            debugPrint('PlantNet identification error: $e');
           }
-        } catch (e) {
-          debugPrint('PlantNet identification error: $e');
         }
-      }
 
-      // ── TIER 3: Fast Gemini Vision Fallback (non-plant objects & edge cases) ──
-      if (isOnline && isAiEngineEnabled && !identifiedByPlantNet &&
-          (confidence < 0.70 || plantName == 'Unknown Plant' || diseaseName == 'Unrecognized')) {
-        try {
-          final visionData = await _gemini.identifyImageFile(file);
+        // ── TIER 3: Fast Gemini Vision Fallback (non-plant objects & edge cases) ──
+        if (!identifiedByPlantNet &&
+            (confidence < 0.70 || plantName == 'Unknown Plant' || diseaseName == 'Unrecognized')) {
+          try {
+            final visionData = await _gemini.identifyImageFile(file);
 
-          final isPlant = visionData['isPlant'] == true;
-          final objName = visionData['objectName']?.toString() ?? 'Unrecognized Item';
-          final objDesc = visionData['description']?.toString() ?? '';
+            final isPlant = visionData['isPlant'] == true;
+            final objName = visionData['objectName']?.toString() ?? 'Unrecognized Item';
+            final objDesc = visionData['description']?.toString() ?? '';
 
-          if (!isPlant) {
-            plantName = objName;
-            diseaseName = 'Object (Non-Plant)';
-            confidence = 0.95;
-            healthScore = 100;
-            remedy = '$objDesc\n\nPhytoLens specializes in plant leaf diagnostics. '
-                'Point your camera at a plant or flower for health analysis.';
-          } else {
-            plantName = objName;
-            diseaseName = 'Identified Plant';
-            confidence = 0.85;
-            healthScore = 85;
-            remedy = objDesc;
+            if (!isPlant) {
+              plantName = objName;
+              diseaseName = 'Object (Non-Plant)';
+              confidence = 0.95;
+              healthScore = 100;
+              remedy = '$objDesc\n\nPhytoLens specializes in plant leaf diagnostics. '
+                  'Point your camera at a plant or flower for health analysis.';
+            } else {
+              plantName = objName;
+              diseaseName = 'Identified Plant';
+              confidence = 0.85;
+              healthScore = 85;
+              remedy = objDesc;
+            }
+          } catch (e) {
+            debugPrint('Gemini vision error: $e');
           }
-        } catch (e) {
-          debugPrint('Gemini vision error: $e');
         }
-      }
 
-      // ── Generate tier-aware disease report via Groq (TEXT only) ────────
-      if (diseaseName != 'Object (Non-Plant)' &&
-          plantName != 'Unknown Plant' && plantName != 'Unrecognized Item') {
-        if (mounted) setState(() => _scanStage = ref.tr('generating_report'));
-        try {
-          if (isOnline && isAiEngineEnabled) {
+        // ── Generate tier-aware disease report via Groq (TEXT only) with 5s timeout ──
+        if (diseaseName != 'Object (Non-Plant)' &&
+            plantName != 'Unknown Plant' && plantName != 'Unrecognized Item') {
+          if (mounted) setState(() => _scanStage = ref.tr('generating_report'));
+          try {
             remedy = await _groq.getTieredAdvice(
               tier: userTier,
               plantName: plantName,
               diseaseName: diseaseName,
               healthScore: healthScore,
-            );
-          } else {
-            throw Exception(isOnline ? 'AI Cloud Engine Disabled by User' : 'Offline mode active');
+            ).timeout(const Duration(seconds: 5));
+          } catch (e) {
+            debugPrint('Groq online report failed/timeout, falling back to local: $e');
+            aiSource = 'offline';
           }
-        } catch (e) {
-          debugPrint('Online report skipped/failed: $e');
-          aiSource = 'offline';
-          try {
-            remedy = await LocalLLMService().getTieredAdvice(
-              tier: userTier,
-              plantName: plantName,
-              diseaseName: diseaseName,
-              healthScore: healthScore,
-              severityPercent: mlResult.healthScore < 100 ? (100 - mlResult.healthScore) : 0,
-              tfliteLabel: diseaseName,
-            );
-          } catch (offlineErr) {
-            debugPrint('Offline report failed: $offlineErr');
-            if (mlResult.treatmentData != null) {
-              final td = mlResult.treatmentData!;
-              remedy = "### Offline Diagnosis: ${td['status']}\n\n"
-                       "**Severity:** ${td['severity']}\n"
-                       "**Immediate Action:** ${td['action']}\n\n"
-                       "**Bio-Organic Remedy:** ${td['bio_remedy']}\n\n"
-                       "**Chemical Alternative:** ${td['chemical_remedy']}";
-            }
+        }
+      } else {
+        // Offline mode: mark source as offline immediately
+        aiSource = 'offline';
+      }
+
+      // ── Offline fallback or offline-first instant report generation ────────
+      if (remedy == null &&
+          diseaseName != 'Object (Non-Plant)' &&
+          plantName != 'Unknown Plant' && plantName != 'Unrecognized Item') {
+        if (mounted) setState(() => _scanStage = ref.tr('generating_report'));
+        aiSource = 'offline';
+        try {
+          remedy = await LocalLLMService().getTieredAdvice(
+            tier: userTier,
+            plantName: plantName,
+            diseaseName: diseaseName,
+            healthScore: healthScore,
+            severityPercent: mlResult.healthScore < 100 ? (100 - mlResult.healthScore) : 0,
+            tfliteLabel: diseaseName,
+          );
+        } catch (offlineErr) {
+          debugPrint('Offline report failed: $offlineErr');
+          if (mlResult.treatmentData != null) {
+            final td = mlResult.treatmentData!;
+            remedy = "### Offline Diagnosis: ${td['status']}\n\n"
+                     "**Severity:** ${td['severity']}\n"
+                     "**Immediate Action:** ${td['action']}\n\n"
+                     "**Bio-Organic Remedy:** ${td['bio_remedy']}\n\n"
+                     "**Chemical Alternative:** ${td['chemical_remedy']}";
           }
         }
       }
@@ -257,7 +267,11 @@ class _CameraScreenState extends ConsumerState<CameraScreen> with WidgetsBinding
           'Connect to the internet for a detailed AI treatment report.';
 
       // ── Prepare ScanResult (User will choose whether to save) ────────
-      final uid = Supabase.instance.client.auth.currentUser?.id ?? '';
+      String uid = Supabase.instance.client.auth.currentUser?.id ?? '';
+      if (uid.isEmpty) {
+        final lastUser = await _localDb.getLastLoggedInUser();
+        uid = lastUser?.uid ?? '';
+      }
       final scanResult = ScanResult(
         id: 'temp_${DateTime.now().millisecondsSinceEpoch}',
         userId: uid,

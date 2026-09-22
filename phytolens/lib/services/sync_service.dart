@@ -4,6 +4,7 @@
 // Saves scans to local SQLite DB first, then syncs to Supabase when online.
 // On reconnect, upgrades offline remedies via Groq cloud AI.
 
+import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -25,6 +26,9 @@ class SyncService {
   final _localDb = LocalDatabase();
   final _chatDb = ChatDatabase();
   bool _isSyncing = false;
+
+  DateTime? _lastOnlineCheck;
+  bool _cachedOnlineStatus = true;
   
   // Expose stream for UI
   Stream<List<ConnectivityResult>> get onConnectivityChanged => Connectivity().onConnectivityChanged;
@@ -39,11 +43,35 @@ class SyncService {
     });
   }
 
+  /// Check real internet reachability. Fast 1.5s socket probe prevents long freezes.
   Future<bool> isOnline() async {
-    final results = await Connectivity().checkConnectivity();
-    return results.contains(ConnectivityResult.mobile) || 
-           results.contains(ConnectivityResult.wifi) ||
-           results.contains(ConnectivityResult.ethernet);
+    final now = DateTime.now();
+    if (_lastOnlineCheck != null && now.difference(_lastOnlineCheck!) < const Duration(seconds: 3)) {
+      return _cachedOnlineStatus;
+    }
+
+    try {
+      final results = await Connectivity().checkConnectivity();
+      final hasInterface = results.contains(ConnectivityResult.mobile) || 
+             results.contains(ConnectivityResult.wifi) ||
+             results.contains(ConnectivityResult.ethernet);
+      if (!hasInterface) {
+        _cachedOnlineStatus = false;
+        _lastOnlineCheck = now;
+        return false;
+      }
+
+      final lookup = await InternetAddress.lookup('google.com')
+          .timeout(const Duration(milliseconds: 1500));
+      final online = lookup.isNotEmpty && lookup[0].rawAddress.isNotEmpty;
+      _cachedOnlineStatus = online;
+      _lastOnlineCheck = now;
+      return online;
+    } catch (_) {
+      _cachedOnlineStatus = false;
+      _lastOnlineCheck = now;
+      return false;
+    }
   }
 
   /// Save a scan locally (always called first, even when online)
@@ -98,10 +126,16 @@ class SyncService {
               }
             }
 
-            await _supabase.saveScan(scanToSync);
+            final saved = await _supabase.saveScan(scanToSync);
             await _gamification.processScanReward(scanToSync.userId);
-            await _localDb.markSynced(scan.id);
-            debugPrint('✅ Synced scan: ${scan.id}');
+
+            // Atomically replace temp scan with cloud scan in local SQLite
+            if (scan.id.startsWith('temp_')) {
+              await _localDb.replaceTempScanWithCloud(scan.id, saved);
+            } else {
+              await _localDb.markSynced(scan.id);
+            }
+            debugPrint('✅ Synced scan: ${scan.id} -> cloud ${saved.id}');
           } catch (e) {
             debugPrint('❌ Failed to sync scan ${scan.id}: $e');
             // Keep it unsynced for next attempt

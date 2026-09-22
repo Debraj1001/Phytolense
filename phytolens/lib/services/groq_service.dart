@@ -92,7 +92,7 @@ Give actionable advice and personalized suggestions. Be encouraging. Use simple 
             'Content-Type': 'application/json',
           },
           body: jsonEncode(body),
-        );
+        ).timeout(const Duration(seconds: 6));
 
         // If rate limited (429), token invalid/exhausted (401/403), switch key and retry
         if (response.statusCode == 429 || response.statusCode == 401 || response.statusCode == 403) {

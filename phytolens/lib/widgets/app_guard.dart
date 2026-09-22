@@ -11,6 +11,7 @@ import '../screens/system/ban_screen.dart';
 import '../config/constants.dart';
 import '../data/local_database.dart';
 import '../data/chat_database.dart';
+import '../services/sync_service.dart';
 import 'app_snackbars.dart';
 
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
@@ -44,15 +45,20 @@ class _AppGuardState extends ConsumerState<AppGuard> {
       _wasUserLoaded = false;
     }
 
-    // Detect if user account was deleted from database by administrator
+    // Detect if user account was deleted from database by administrator (only when confirmed online)
     if (_wasUserLoaded &&
         authUser != null &&
         currentUserAsync.hasValue &&
         currentUserAsync.value == null &&
         !_isHandlingDeletion) {
       _isHandlingDeletion = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _handleAccountDeleted(authUser.id);
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final online = await SyncService().isOnline();
+        if (online) {
+          _handleAccountDeleted(authUser.id);
+        } else {
+          _isHandlingDeletion = false;
+        }
       });
     }
 

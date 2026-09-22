@@ -106,6 +106,29 @@ class AppConfig {
     return AppConfig.fromPlansAndConfig([], m);
   }
 
+  Map<String, dynamic> toMap() {
+    return {
+      'free_daily_scan_limit': freeScanLimit,
+      'pro_daily_scan_limit': proScanLimit,
+      'farm_daily_scan_limit': farmScanLimit,
+      'free_daily_ai_limit': freeAiLimit,
+      'pro_daily_ai_limit': proAiLimit,
+      'farm_daily_ai_limit': farmAiLimit,
+      'pro_monthly_price': proMonthlyPrice,
+      'farm_monthly_price': farmMonthlyPrice,
+      'free_tier_days': freeTierDays,
+      'farm_creation_limit_free': farmCreationLimitFree,
+      'farm_creation_limit_pro': farmCreationLimitPro,
+      'farm_creation_limit_farm': farmCreationLimitFarm,
+      'garden_enabled': gardenEnabled,
+      'bulk_export_enabled': bulkExportEnabled,
+      'trial_price': trialPrice,
+      'trial_days': trialDays,
+      'trial_enabled': trialEnabled,
+      'maintenance_mode': maintenanceMode,
+    };
+  }
+
   // ── Display helpers ────────────────────────────────────────────────────────
 
   String get proPrice => '₹$proMonthlyPrice';

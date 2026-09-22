@@ -1,5 +1,3 @@
-// lib/services/supabase_service.dart
-
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -10,6 +8,7 @@ import '../models/app_config.dart';
 import '../config/constants.dart';
 import '../data/local_database.dart';
 import '../data/chat_database.dart';
+import 'secure_tier_service.dart';
 
 class SupabaseService {
   SupabaseClient get _client => Supabase.instance.client;
@@ -17,32 +16,68 @@ class SupabaseService {
   // ─── Users ───────────────────────────────────────────────────────────────
 
   Future<void> upsertUser(AppUser user) async {
-    await _client.from(AppConstants.tableUsers).upsert(user.toMap());
+    // Save to local cache first
+    await LocalDatabase().saveCachedUser(user);
+    try {
+      await _client
+          .from(AppConstants.tableUsers)
+          .upsert(user.toMap())
+          .timeout(const Duration(seconds: 4));
+    } catch (e) {
+      debugPrint('Cloud upsertUser deferred/failed (offline): $e');
+    }
   }
 
   Future<AppUser?> getUser(String uid) async {
-    final res = await _client
-        .from(AppConstants.tableUsers)
-        .select()
-        .eq('uid', uid)
-        .maybeSingle();
-        
-    if (res != null) {
-      final user = AppUser.fromMap(res);
-      // Validate subscription window ONLY if an expiry date is set
-      if (user.subscriptionTier != AppConstants.tierFree) {
-        if (user.subscriptionExpiry != null && DateTime.now().isAfter(user.subscriptionExpiry!)) {
-          // Subscription expired, revert to free
-          await updateSubscription(uid, AppConstants.tierFree);
-          return user.copyWith(
-            subscriptionTier: AppConstants.tierFree,
-            subscriptionExpiry: null,
-          );
+    // 1. Immediately read from local cache
+    final cached = await LocalDatabase().getCachedUser(uid);
+
+    // 2. Fetch fresh profile from Supabase with 3s timeout
+    try {
+      final res = await _client
+          .from(AppConstants.tableUsers)
+          .select()
+          .eq('uid', uid)
+          .maybeSingle()
+          .timeout(const Duration(seconds: 3));
+          
+      if (res != null) {
+        final user = AppUser.fromMap(res);
+        // Persist to local cache
+        await LocalDatabase().saveCachedUser(user);
+
+        // Validate subscription window ONLY if an expiry date is set
+        if (user.subscriptionTier != AppConstants.tierFree) {
+          if (user.subscriptionExpiry != null && DateTime.now().isAfter(user.subscriptionExpiry!)) {
+            // Subscription expired, revert to free
+            await updateSubscription(uid, AppConstants.tierFree);
+            final updated = user.copyWith(
+              subscriptionTier: AppConstants.tierFree,
+              subscriptionExpiry: null,
+            );
+            await LocalDatabase().saveCachedUser(updated);
+            return updated;
+          }
         }
+        return user;
       }
-      return user;
+    } catch (e) {
+      debugPrint('SupabaseService.getUser network/timeout, using local cache: $e');
     }
-    return null;
+
+    if (cached != null) return cached;
+
+    // 3. Resilient offline fallback if user exists locally
+    final tier = await SecureTierService().getCachedTierString();
+    final fallbackUser = AppUser(
+      uid: uid,
+      email: '',
+      displayName: 'Plant Lover',
+      subscriptionTier: tier,
+      createdAt: DateTime.now(),
+    );
+    await LocalDatabase().saveCachedUser(fallbackUser);
+    return fallbackUser;
   }
 
   Stream<AppUser?> streamUser(String uid) {
@@ -295,12 +330,21 @@ class SupabaseService {
       return;
     }
 
-    await _client.from(AppConstants.tableScanHistory).delete().eq('id', scanId);
     try {
-      await _client.from('scans').delete().eq('id', scanId);
-    } catch (_) {}
-    if (userId != null && userId.isNotEmpty) {
-      await decrementScanCounters(userId);
+      await _client
+          .from(AppConstants.tableScanHistory)
+          .delete()
+          .eq('id', scanId)
+          .timeout(const Duration(seconds: 4));
+      try {
+        await _client.from('scans').delete().eq('id', scanId).timeout(const Duration(seconds: 3));
+      } catch (_) {}
+      if (userId != null && userId.isNotEmpty) {
+        await decrementScanCounters(userId);
+      }
+    } catch (e) {
+      debugPrint('Cloud scan deletion timeout/error: $e');
+      rethrow;
     }
   }
 
@@ -508,7 +552,8 @@ class SupabaseService {
           .from(AppConstants.tableAppConfig)
           .select()
           .limit(1)
-          .maybeSingle();
+          .maybeSingle()
+          .timeout(const Duration(seconds: 3));
       return res ?? {};
     } catch (_) {
       return {};
@@ -517,7 +562,10 @@ class SupabaseService {
 
   Future<List<Map<String, dynamic>>> getPlans() async {
     try {
-      final res = await _client.from('plans').select();
+      final res = await _client
+          .from('plans')
+          .select()
+          .timeout(const Duration(seconds: 3));
       return List<Map<String, dynamic>>.from(res);
     } catch (_) {
       return [];
@@ -535,9 +583,12 @@ class SupabaseService {
     try {
       final plans = await getPlans();
       final configMap = await getAppConfig();
-      return AppConfig.fromPlansAndConfig(plans, configMap);
+      final config = AppConfig.fromPlansAndConfig(plans, configMap);
+      await LocalDatabase().saveCachedAppConfig(config);
+      return config;
     } catch (_) {
-      return const AppConfig();
+      final cached = await LocalDatabase().getCachedAppConfig();
+      return cached ?? const AppConfig();
     }
   }
 

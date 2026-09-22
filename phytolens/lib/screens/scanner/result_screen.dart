@@ -183,44 +183,54 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
   }
 
   Future<void> _autoSaveScan() async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null || _isSaved || _saving) return;
+    if (_isSaved || _saving) return;
+
+    final authUser = Supabase.instance.client.auth.currentUser;
+    String userId = authUser?.id ?? '';
+    if (userId.isEmpty) {
+      final lastUser = await _localDb.getLastLoggedInUser();
+      userId = lastUser?.uid ?? _currentScan.userId;
+    }
+
+    if (userId.isEmpty && _currentScan.userId.isEmpty) return;
+    final effectiveUserId = userId.isNotEmpty ? userId : _currentScan.userId;
 
     setState(() => _saving = true);
 
     try {
       final isOnline = await _syncService.isOnline();
+      final scanId = _currentScan.id.isNotEmpty
+          ? _currentScan.id
+          : 'temp_${DateTime.now().millisecondsSinceEpoch}';
 
       final scanToSave = ScanResult(
-        id: '',
-        userId: user.id,
+        id: scanId,
+        userId: effectiveUserId,
         diseaseName: _currentScan.diseaseName,
         diseaseConfidence: _currentScan.diseaseConfidence,
         plantName: _currentScan.plantName,
         healthScore: _currentScan.healthScore,
         remedy: _aiAdvice ?? _currentScan.remedy,
-        scannedAt: DateTime.now(),
+        scannedAt: _currentScan.scannedAt,
         imageUrl: widget.imageFile?.path ?? _currentScan.imageUrl,
+        aiSource: _currentScan.aiSource,
       );
 
       ScanResult saved;
       if (isOnline) {
         try {
-          saved = await _supabase.saveScan(scanToSave);
-          // Delete temporary scan from local DB if it existed
-          if (_currentScan.id.startsWith('temp_')) {
-            await _localDb.deleteScan(_currentScan.id);
-          }
-          await _localDb.upsertScan(saved, synced: true);
+          saved = await _supabase.saveScan(scanToSave).timeout(const Duration(seconds: 4));
+          // Atomically replace temp scan with confirmed Supabase cloud scan in SQLite
+          await _localDb.replaceTempScanWithCloud(scanId, saved);
           await _limiter.incrementLocalScanCount();
         } catch (e) {
-          debugPrint('Supabase saveScan notice, falling back to local DB: $e');
-          await _syncService.saveScanOffline(scanToSave);
+          debugPrint('Supabase saveScan notice, preserving local DB: $e');
+          await _localDb.upsertScan(scanToSave, synced: false);
           await _limiter.incrementLocalScanCount();
           saved = scanToSave;
         }
       } else {
-        await _syncService.saveScanOffline(scanToSave);
+        await _localDb.upsertScan(scanToSave, synced: false);
         await _limiter.incrementLocalScanCount();
         saved = scanToSave;
       }
@@ -238,7 +248,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
 
       // Background upload image to cloud storage if online, then attach URL
       if (isOnline && widget.imageFile != null && saved.id.isNotEmpty && !saved.id.startsWith('temp_')) {
-        _uploadAndAttachImage(widget.imageFile!, user.id, saved.id);
+        _uploadAndAttachImage(widget.imageFile!, effectiveUserId, saved.id);
       }
     } catch (e) {
       debugPrint('Error auto-saving scan: $e');

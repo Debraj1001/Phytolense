@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// WMO weather code → human-readable description + icon data
 class _WmoCode {
@@ -105,26 +106,64 @@ class WeatherService {
 
   Future<SprayWindow?> getSprayWindow() async {
     try {
-      final position = await _getLocation();
-      final lat = position?.latitude ?? 28.7041;
-      final lon = position?.longitude ?? 77.1025;
+      final prefs = await SharedPreferences.getInstance();
+      Map<String, dynamic>? data;
 
-      // Request current weather with weather_code + apparent_temperature
-      // Request hourly with precipitation_probability for accurate forecasting
-      final url = Uri.parse(
-        'https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon'
-        '&current=temperature_2m,relative_humidity_2m,apparent_temperature,'
-        'precipitation,weather_code,wind_speed_10m'
-        '&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m,'
-        'precipitation,precipitation_probability,weather_code'
-        '&forecast_days=2'
-        '&timezone=auto',
-      );
+      try {
+        final position = await _getLocation().timeout(const Duration(seconds: 2), onTimeout: () => null);
+        final lat = position?.latitude ?? 28.7041;
+        final lon = position?.longitude ?? 77.1025;
 
-      final response = await http.get(url).timeout(const Duration(seconds: 10));
-      if (response.statusCode != 200) return null;
+        final url = Uri.parse(
+          'https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon'
+          '&current=temperature_2m,relative_humidity_2m,apparent_temperature,'
+          'precipitation,weather_code,wind_speed_10m'
+          '&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m,'
+          'precipitation,precipitation_probability,weather_code'
+          '&forecast_days=2'
+          '&timezone=auto',
+        );
 
-      final data = json.decode(response.body);
+        final response = await http.get(url).timeout(const Duration(seconds: 3));
+        if (response.statusCode == 200) {
+          data = json.decode(response.body);
+          await prefs.setString('cached_weather_json', response.body);
+        }
+      } catch (e) {
+        debugPrint('Weather fetch network error/timeout (falling back to cache): $e');
+      }
+
+      // If network failed, attempt to use cached weather
+      if (data == null) {
+        final cached = prefs.getString('cached_weather_json');
+        if (cached != null && cached.isNotEmpty) {
+          try {
+            data = json.decode(cached);
+          } catch (_) {}
+        }
+      }
+
+      // If still null (e.g. initial launch offline), provide offline safe estimate
+      if (data == null) {
+        return SprayWindow(
+          isOptimal: true,
+          message: 'Offline Mode: Spray early morning or late evening when calm.',
+          nextBestTime: 'Early morning (06:00 - 08:00)',
+          current: WeatherCondition(
+            temperature: 24.0,
+            feelsLike: 24.0,
+            humidity: 55.0,
+            windSpeed: 5.0,
+            precipitation: 0.0,
+            weatherCode: 0,
+            weatherDescription: 'Dry & Clear (Offline)',
+            weatherEmoji: '🌤️',
+            isCurrentlyRaining: false,
+            precipitationProbability: 0,
+          ),
+        );
+      }
+
       final current = data['current'];
       if (current == null) return null;
 

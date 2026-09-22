@@ -1,14 +1,11 @@
-// lib/data/local_database.dart
-//
-// Local SQLite database for offline scan history.
-// All scans are saved locally first, then synced to Supabase when online.
-// This is the single source of truth for scan history on the device.
-
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 import '../models/scan_result.dart';
+import '../models/app_user.dart';
+import '../models/app_config.dart';
 
 class LocalDatabase {
   static final LocalDatabase _instance = LocalDatabase._internal();
@@ -29,7 +26,7 @@ class LocalDatabase {
 
     return openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE scans (
@@ -60,16 +57,28 @@ class LocalDatabase {
           )
         ''');
 
-        // Index for fast offline-first queries
-        await db.execute(
-          'CREATE INDEX idx_scans_user ON scans(user_id)',
-        );
-        await db.execute(
-          'CREATE INDEX idx_scans_synced ON scans(synced)',
-        );
-        await db.execute(
-          'CREATE INDEX idx_scans_date ON scans(scanned_at DESC)',
-        );
+        // Cached user profiles for instant offline startup
+        await db.execute('''
+          CREATE TABLE cached_users (
+            uid TEXT PRIMARY KEY,
+            data TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+          )
+        ''');
+
+        // Cached global app configuration
+        await db.execute('''
+          CREATE TABLE cached_config (
+            key TEXT PRIMARY KEY,
+            data TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+          )
+        ''');
+
+        // Indexes for fast offline-first queries
+        await db.execute('CREATE INDEX idx_scans_user ON scans(user_id)');
+        await db.execute('CREATE INDEX idx_scans_synced ON scans(synced)');
+        await db.execute('CREATE INDEX idx_scans_date ON scans(scanned_at DESC)');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -81,8 +90,117 @@ class LocalDatabase {
             )
           ''');
         }
+        if (oldVersion < 3) {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS cached_users (
+              uid TEXT PRIMARY KEY,
+              data TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            )
+          ''');
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS cached_config (
+              key TEXT PRIMARY KEY,
+              data TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            )
+          ''');
+        }
       },
     );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // USER PROFILE & CONFIG CACHING (Instant Offline Cold-Start)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  Future<void> saveCachedUser(AppUser user) async {
+    try {
+      final db = await database;
+      await db.insert(
+        'cached_users',
+        {
+          'uid': user.uid,
+          'data': jsonEncode(user.toMap()),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      debugPrint('💾 Cached user profile offline: ${user.displayName} (${user.uid})');
+    } catch (e) {
+      debugPrint('Error saving cached user: $e');
+    }
+  }
+
+  Future<AppUser?> getCachedUser(String uid) async {
+    try {
+      final db = await database;
+      final results = await db.query(
+        'cached_users',
+        where: 'uid = ?',
+        whereArgs: [uid],
+        limit: 1,
+      );
+      if (results.isNotEmpty) {
+        final data = jsonDecode(results.first['data'] as String) as Map<String, dynamic>;
+        return AppUser.fromMap(data);
+      }
+    } catch (e) {
+      debugPrint('Error reading cached user: $e');
+    }
+    return null;
+  }
+
+  Future<AppUser?> getLastLoggedInUser() async {
+    try {
+      final db = await database;
+      final results = await db.query(
+        'cached_users',
+        orderBy: 'updated_at DESC',
+        limit: 1,
+      );
+      if (results.isNotEmpty) {
+        final data = jsonDecode(results.first['data'] as String) as Map<String, dynamic>;
+        return AppUser.fromMap(data);
+      }
+    } catch (e) {
+      debugPrint('Error reading last logged in user: $e');
+    }
+    return null;
+  }
+
+  Future<void> saveCachedAppConfig(AppConfig config) async {
+    try {
+      final db = await database;
+      await db.insert(
+        'cached_config',
+        {
+          'key': 'app_config',
+          'data': jsonEncode(config.toMap()),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    } catch (e) {
+      debugPrint('Error caching app config: $e');
+    }
+  }
+
+  Future<AppConfig?> getCachedAppConfig() async {
+    try {
+      final db = await database;
+      final results = await db.query(
+        'cached_config',
+        where: 'key = ?',
+        whereArgs: ['app_config'],
+        limit: 1,
+      );
+      if (results.isNotEmpty) {
+        final data = jsonDecode(results.first['data'] as String) as Map<String, dynamic>;
+        return AppConfig.fromMap(data);
+      }
+    } catch (_) {}
+    return null;
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -93,6 +211,12 @@ class LocalDatabase {
   Future<void> upsertScan(ScanResult scan, {bool synced = false}) async {
     final db = await database;
     final map = scan.toMap(includeId: true);
+    // Ensure id is always present
+    if (scan.id.isNotEmpty) {
+      map['id'] = scan.id;
+    } else {
+      map['id'] = 'temp_${DateTime.now().millisecondsSinceEpoch}';
+    }
     map['synced'] = synced ? 1 : 0;
     map['flagged'] = scan.flagged ? 1 : 0;
 
@@ -103,13 +227,38 @@ class LocalDatabase {
     );
   }
 
-  /// Batch insert or update multiple scan results in a single transaction
+  /// Atomically replace a local temporary scan with the confirmed cloud scan UUID
+  Future<void> replaceTempScanWithCloud(String tempId, ScanResult cloudScan) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      if (tempId.isNotEmpty) {
+        await txn.delete('scans', where: 'id = ?', whereArgs: [tempId]);
+      }
+      final map = cloudScan.toMap(includeId: true);
+      if (cloudScan.id.isNotEmpty) {
+        map['id'] = cloudScan.id;
+      }
+      map['synced'] = 1;
+      map['flagged'] = cloudScan.flagged ? 1 : 0;
+      await txn.insert('scans', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    });
+    debugPrint('🔄 Replaced temp scan $tempId with cloud UUID ${cloudScan.id}');
+  }
+
+  /// Batch insert or update multiple scan results in a single transaction.
+  /// Ignores any scans that are in the pending deletions queue to prevent resurrection.
   Future<void> batchUpsertScans(List<ScanResult> scans, {bool synced = false}) async {
     if (scans.isEmpty) return;
     final db = await database;
+
+    final pending = await getPendingDeletions();
+    final pendingIds = pending.map((r) => r['scan_id'] as String).toSet();
+
     final batch = db.batch();
     for (final scan in scans) {
+      if (scan.id.isEmpty || pendingIds.contains(scan.id)) continue;
       final map = scan.toMap(includeId: true);
+      map['id'] = scan.id;
       map['synced'] = synced ? 1 : 0;
       map['flagged'] = scan.flagged ? 1 : 0;
       batch.insert(
@@ -121,17 +270,17 @@ class LocalDatabase {
     await batch.commit(noResult: true);
   }
 
-
-  /// Get all scans for a user, ordered by date (newest first)
+  /// Get all scans for a user, ordered by date (newest first).
+  /// Excludes any scans currently queued for deletion.
   Future<List<ScanResult>> getUserScans(String userId, {int limit = 50}) async {
     final db = await database;
-    final results = await db.query(
-      'scans',
-      where: 'user_id = ?',
-      whereArgs: [userId],
-      orderBy: 'scanned_at DESC',
-      limit: limit,
-    );
+    final results = await db.rawQuery('''
+      SELECT s.* FROM scans s
+      LEFT JOIN pending_deletions p ON s.id = p.scan_id
+      WHERE (s.user_id = ? OR ? = '') AND p.scan_id IS NULL AND s.id != ''
+      ORDER BY s.scanned_at DESC
+      LIMIT ?
+    ''', [userId, userId, limit]);
 
     return results.map((row) {
       final map = Map<String, dynamic>.from(row);
@@ -164,11 +313,12 @@ class LocalDatabase {
   /// Get all unsynced scans (for background sync)
   Future<List<ScanResult>> getUnsyncedScans() async {
     final db = await database;
-    final results = await db.query(
-      'scans',
-      where: 'synced = 0',
-      orderBy: 'scanned_at ASC',
-    );
+    final results = await db.rawQuery('''
+      SELECT s.* FROM scans s
+      LEFT JOIN pending_deletions p ON s.id = p.scan_id
+      WHERE s.synced = 0 AND p.scan_id IS NULL AND s.id != ''
+      ORDER BY s.scanned_at ASC
+    ''');
 
     return results.map((row) {
       final map = Map<String, dynamic>.from(row);
@@ -215,24 +365,24 @@ class LocalDatabase {
     final db = await database;
 
     final countResult = await db.rawQuery(
-      'SELECT COUNT(*) as total FROM scans WHERE user_id = ?',
-      [userId],
+      'SELECT COUNT(*) as total FROM scans WHERE (user_id = ? OR ? = "") AND id != ""',
+      [userId, userId],
     );
     final total = Sqflite.firstIntValue(countResult) ?? 0;
 
     final avgResult = await db.rawQuery(
-      'SELECT AVG(health_score) as avg_health FROM scans WHERE user_id = ?',
-      [userId],
+      'SELECT AVG(health_score) as avg_health FROM scans WHERE (user_id = ? OR ? = "") AND id != ""',
+      [userId, userId],
     );
     final avgHealth = (avgResult.first['avg_health'] as num?)?.toInt() ?? 0;
 
     final diseaseResult = await db.rawQuery(
       '''SELECT COUNT(*) as diseases FROM scans 
-         WHERE user_id = ? AND disease_name != 'Healthy' 
+         WHERE (user_id = ? OR ? = "") AND id != "" AND disease_name != 'Healthy' 
          AND disease_name != 'Identified Species'
          AND disease_name != 'Object (Non-Plant)'
          AND disease_name != 'Identified Plant' ''',
-      [userId],
+      [userId, userId],
     );
     final diseases = Sqflite.firstIntValue(diseaseResult) ?? 0;
 
@@ -261,6 +411,7 @@ class LocalDatabase {
   Future<void> deleteScan(String id) async {
     final db = await database;
     await db.delete('scans', where: 'id = ?', whereArgs: [id]);
+    await db.delete('scans', where: 'id = ?', whereArgs: ['']);
   }
 
   /// Delete all scans for a user (used during account reset/deletion)

@@ -12,6 +12,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../config/constants.dart';
 import '../../services/supabase_service.dart';
 import '../../services/language_service.dart';
+import '../../data/local_database.dart';
 import '../../widgets/language_selector_sheet.dart';
 import '../../theme/colors.dart';
 
@@ -107,15 +108,26 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   }
 
   Future<void> _detectTierAndNavigate() async {
+    final localDb = LocalDatabase();
     try {
       final prefs = await SharedPreferences.getInstance();
       final cached = prefs.getString('cached_user_tier');
       if (cached != null && cached.isNotEmpty && mounted) {
         setState(() => _detectedTier = cached.toLowerCase());
       }
+
+      // Check offline local database for last logged in user
+      final lastUser = await localDb.getLastLoggedInUser();
+      if (lastUser != null && mounted) {
+        setState(() => _detectedTier = lastUser.subscriptionTier.toLowerCase());
+      }
+
       final sbUser = Supabase.instance.client.auth.currentUser;
       if (sbUser != null) {
-        final appUser = await SupabaseService().getUser(sbUser.id);
+        final appUser = await SupabaseService().getUser(sbUser.id).timeout(
+          const Duration(seconds: 2),
+          onTimeout: () => null,
+        );
         if (appUser != null && mounted) {
           final tier = appUser.subscriptionTier.toLowerCase();
           setState(() => _detectedTier = tier);
@@ -124,7 +136,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       }
     } catch (_) {}
 
-    await Future.delayed(const Duration(milliseconds: 2600));
+    await Future.delayed(const Duration(milliseconds: 2100));
     if (!mounted) return;
 
     if (!LanguageService().hasSelectedLanguage) {
@@ -144,11 +156,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     } catch (e) {
       debugPrint('Error getting Supabase user: $e');
     }
+    final lastUser = await localDb.getLastLoggedInUser();
+    final hasUserSession = (user != null) || (lastUser != null);
     if (!mounted) return;
 
     if (!onboardingDone) {
       Navigator.pushReplacementNamed(context, AppConstants.routeOnboarding);
-    } else if (user == null) {
+    } else if (!hasUserSession) {
       Navigator.pushReplacementNamed(context, AppConstants.routeLogin);
     } else {
       Navigator.pushReplacementNamed(context, AppConstants.routeHome);
