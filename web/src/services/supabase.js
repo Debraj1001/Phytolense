@@ -130,7 +130,7 @@ export async function fetchAppConfig() {
       latest_version_code: 5,
       apk_size_mb: '124 MB',
       min_supported_version: '1.0.0',
-      download_url_android: 'https://github.com/Debraj1001/Phytolense/releases/download/v1.0.4/app-release.apk',
+      download_url_android: 'https://github.com/Debraj1001/Phytolense/releases/download/v1.0.4/phytolens-v1.0.4.apk',
       download_url_github_release: 'https://github.com/Debraj1001/Phytolense/releases/tag/v1.0.4',
       download_url_playstore: 'https://play.google.com/store/apps/details?id=com.phytolens.app',
       download_url_ios: 'https://testflight.apple.com/join/phytolens',
@@ -145,12 +145,47 @@ export async function fetchAppConfig() {
 
 export async function saveAppConfig(updates) {
   try {
+    const validColumns = new Set([
+      'free_tier_days',
+      'free_daily_scan_limit',
+      'pro_daily_scan_limit',
+      'farm_daily_scan_limit',
+      'free_daily_ai_limit',
+      'pro_daily_ai_limit',
+      'farm_daily_ai_limit',
+      'farm_creation_limit_free',
+      'farm_creation_limit_pro',
+      'farm_creation_limit_farm',
+      'pro_monthly_price',
+      'farm_monthly_price',
+      'garden_enabled',
+      'bulk_export_enabled',
+      'maintenance_mode',
+      'latest_version',
+      'trial_price',
+      'trial_days',
+      'trial_enabled',
+      'download_url_android',
+      'download_url_playstore',
+      'download_url_ios',
+      'download_url_web',
+      'qr_primary_target',
+      'qr_foreground_color',
+      'qr_error_correction',
+      'qr_logo_enabled'
+    ]);
+
+    const sanitized = {};
+    for (const [key, value] of Object.entries(updates)) {
+      if (validColumns.has(key)) {
+        sanitized[key] = value;
+      }
+    }
+    sanitized.updated_at = new Date().toISOString();
+
     const { data, error } = await supabaseAdmin
       .from('app_config')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString()
-      })
+      .update(sanitized)
       .eq('id', 1)
       .select()
       .single();

@@ -17,7 +17,7 @@ import {
   Info
 } from 'lucide-react';
 
-const OFFICIAL_APK_DOWNLOAD_URL = 'https://github.com/Debraj1001/Phytolense/releases/download/v1.0.4/app-release.apk';
+const OFFICIAL_APK_DOWNLOAD_URL = 'https://github.com/Debraj1001/Phytolense/releases/download/v1.0.4/phytolens-v1.0.4.apk';
 const OFFICIAL_GITHUB_RELEASE_URL = 'https://github.com/Debraj1001/Phytolense/releases/tag/v1.0.4';
 
 export default function QrDownloadSection() {
@@ -32,7 +32,7 @@ export default function QrDownloadSection() {
   const webUrl = appConfig?.download_url_web || 'https://phytolens.agritech.org';
   
   // Dynamic version extraction
-  const version = appConfig?.latest_version || (androidUrl.match(/\/releases\/download\/v?([^\/]+)/)?.[1]) || '1.0.3';
+  const version = appConfig?.latest_version || (androidUrl.match(/\/releases\/download\/v?([^\/]+)/)?.[1]) || '1.0.4';
   const displayVersion = version.startsWith('v') ? version : `v${version}`;
   const apkSize = appConfig?.apk_size || '124.3 MB APK';
   const apkFilename = androidUrl.split('/').pop() || `phytolens-${displayVersion}.apk`;
