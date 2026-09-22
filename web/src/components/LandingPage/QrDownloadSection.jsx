@@ -17,8 +17,8 @@ import {
   Info
 } from 'lucide-react';
 
-const OFFICIAL_APK_DOWNLOAD_URL = 'https://github.com/Debraj1001/Phytolense/releases/download/v1.0.3/app-release.apk';
-const OFFICIAL_GITHUB_RELEASE_URL = 'https://github.com/Debraj1001/Phytolense/releases/tag/v1.0.3';
+const OFFICIAL_APK_DOWNLOAD_URL = 'https://github.com/Debraj1001/Phytolense/releases/download/v1.0.4/app-release.apk';
+const OFFICIAL_GITHUB_RELEASE_URL = 'https://github.com/Debraj1001/Phytolense/releases/tag/v1.0.4';
 
 export default function QrDownloadSection() {
   const { appConfig, setQrZoomModalOpen, showToast } = useApp();
